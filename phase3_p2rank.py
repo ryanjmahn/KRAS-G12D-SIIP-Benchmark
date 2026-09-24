@@ -20,7 +20,7 @@ PRANK = './p2rank_2.4.2/prank'
 openness={}
 with open('ladder_dense.csv') as f:
     for row in csv.DictReader(f):
-        c=int(row['conf']); openness[c]=float(row['switch2_rmsd']) if row['switch2_rmsd'] else 0.0
+       c = int(row['conf']); openness[c] = float(row['siip_volume']) if row['siip_volume'] else 0.0
 
 def run_p2rank(pdbpath, outdir):
     # run P2Rank predict; -o sets output dir

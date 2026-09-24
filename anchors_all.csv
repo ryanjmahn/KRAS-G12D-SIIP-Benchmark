@@ -1,0 +1,7 @@
+structure,tool,n_pockets_near,dca,precision,recall,mcc,n_predicted
+5US4,P2Rank,0,NA,0.000,0.000,0.000,0
+5US4,fpocket,3,7.17,0.538,0.280,0.318,13
+5US4,AE-PocketMiner,NA,NA,0.163,0.280,0.024,43
+7RPZ,P2Rank,1,3.59,1.000,0.720,0.828,18
+7RPZ,fpocket,1,2.30,1.000,0.920,0.953,23
+7RPZ,AE-PocketMiner,NA,NA,0.222,0.400,0.125,45
