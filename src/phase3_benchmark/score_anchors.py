@@ -1,3 +1,7 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from paths import P2RANK_ANCHOR_OUT, PM_PREDS, RESULTS, STRUCTURES
 import os, csv, numpy as np
 from prody import parsePDB
 from phase3_p2rank import parse_predictions
@@ -22,8 +26,8 @@ def universe_and_his(pdb):
     return set(int(r) for r in ca.getResnums()), his.getCoords()[0]
 
 rows=[]
-for tag, pdb, p2dir in [("5US4","5US4_H.pdb","anchors_out/p2rank_5US4"),
-                        ("7RPZ","7RPZ_H.pdb","anchors_out/p2rank_7RPZ")]:
+for tag, pdb, p2dir in [("5US4",str(STRUCTURES/"5US4_H.pdb"),str(P2RANK_ANCHOR_OUT/"p2rank_5US4")),
+                        ("7RPZ",str(STRUCTURES/"7RPZ_H.pdb"),str(P2RANK_ANCHOR_OUT/"p2rank_7RPZ"))]:
     uni, his = universe_and_his(pdb)
 
     # --- P2Rank: union of pockets within NEAR of His95 ---
@@ -48,7 +52,7 @@ for tag, pdb, p2dir in [("5US4","5US4_H.pdb","anchors_out/p2rank_5US4"),
     rows.append([tag,"fpocket",len(near_f),f"{dmin:.2f}" if dmin else "NA",f"{pr:.3f}",f"{rc:.3f}",f"{mc:.3f}",n])
 
     # --- AE-PocketMiner: residues above threshold ---
-    npy=f"ae-pocketminer/results/pocketminer/{pdb.replace('.pdb','')}-preds.npy"
+    npy=str(PM_PREDS / f"{tag}_H-preds.npy")
     preds=np.load(npy).flatten()
     resl=sorted(uni)
     pred_pm={r for r,p in zip(resl,preds) if p>=PM_THRESH}
@@ -58,7 +62,7 @@ for tag, pdb, p2dir in [("5US4","5US4_H.pdb","anchors_out/p2rank_5US4"),
     rows.append([tag,"AE-PocketMiner","NA","NA",f"{pr:.3f}",f"{rc:.3f}",f"{mc:.3f}",n])
     print(f"{tag} PM mean prob: key {mean_key:.3f} vs protein-wide {mean_all:.3f}")
 
-with open("anchors_all.csv","w",newline="") as f:
+with open(RESULTS / "anchors_all.csv","w",newline="") as f:
     w=csv.writer(f)
     w.writerow(["structure","tool","n_pockets_near","dca","precision","recall","mcc","n_predicted"])
     w.writerows(rows)

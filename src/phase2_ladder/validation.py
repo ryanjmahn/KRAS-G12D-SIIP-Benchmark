@@ -1,3 +1,7 @@
 import pandas as pd
-d = pd.read_csv("ladder_dense.csv")
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from paths import LADDER_CSV
+d = pd.read_csv(LADDER_CSV)
 print(d[["switch2_rmsd","siip_volume"]].corr(method="spearman"))

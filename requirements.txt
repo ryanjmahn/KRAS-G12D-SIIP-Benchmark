@@ -1,0 +1,8 @@
+# Python packages imported by src/ (versions from envs/structprep.yml).
+# fpocket, AutoDock Vina, Java 17, P2Rank and AE-PocketMiner are not pip packages; see SETUP.md.
+prody==2.6.1
+numpy==2.2.6
+pandas==2.3.3
+matplotlib==3.10.9
+rdkit==2026.03.1
+meeko==0.8.0
