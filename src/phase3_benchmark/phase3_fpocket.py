@@ -11,6 +11,10 @@ Per conformer, vs openness (switch-II RMSD):
 """
 from prody import *
 import numpy as np, os, subprocess, csv
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from paths import LADDER_CSV, LADDER_PDBS, RESULTS
 
 TRUE_ALL=[9,10,11,12,16,58,59,60,61,62,63,64,65,68,69,72,78,88,92,95,96,99,100,102,103]
 MISSING={60,61,62,63,64}
@@ -18,7 +22,7 @@ TRUE_PRESENT=[r for r in TRUE_ALL if r not in MISSING]
 LIG_CENTER=np.array([-36.787,37.918,9.395])
 
 openness={}
-with open('ladder_dense.csv') as f:
+with open(LADDER_CSV) as f:
     for row in csv.DictReader(f):
         c=int(row['conf']); openness[c]=float(row['switch2_rmsd']) if row['switch2_rmsd'] else 0.0
 
@@ -100,7 +104,7 @@ print("conf | open | #frag | DCA | union_rec | best1_rec | union_MCC")
 print("-"*64)
 rows=[]
 for c in range(24):
-    p=f'ladder_dense/dense_{c:02d}.pdb'
+    p=str(LADDER_PDBS / f'dense_{c:02d}.pdb')
     r=analyze(p); o=openness.get(c,0.0)
     if r:
         print(f" {c:2d}  | {o:.2f} |   {r['n_frag']}   | {r['dca']:4.1f}| {r['recall']:.2f}      | {r['best_single']:.2f}      | {r['mcc']:.2f}")
@@ -109,7 +113,7 @@ for c in range(24):
         print(f" {c:2d}  | {o:.2f} |   -   |  -  |  -        |  -        |  -")
         rows.append((c,o,None))
 
-with open('phase3_fpocket.csv','w') as f:
+with open(RESULTS / 'phase3_fpocket.csv','w') as f:
     f.write("conf,openness,n_fragments,dca,union_precision,union_recall,union_f1,union_mcc,best_single_recall\n")
     for c,o,r in rows:
         if r:

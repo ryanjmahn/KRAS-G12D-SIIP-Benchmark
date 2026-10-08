@@ -1,16 +1,14 @@
+# Tools, installed locally (see SETUP.md)
 ae-pocketminer/
 p2rank_2.4.2/
+p2rank.tar.gz
+
+# Generated locally: ladder conformers, tool outputs
+runs/
 *_out/
+*.npy
+
+# Python / OS
 __pycache__/
 *.pyc
-.DS_Store
-*.npy
-p2rank.tar.gz
-ladder/
-ladder_test/
-ladder/
-ladder_test/
-ladder_dense/
-ae-pocketminer/results/
-p2rank_out/
 .DS_Store

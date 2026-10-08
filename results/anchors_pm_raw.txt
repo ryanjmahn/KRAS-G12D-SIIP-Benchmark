@@ -1,0 +1,2 @@
+5US4_H: FOUND at ae-pocketminer/results/pocketminer/5US4_H-preds.npy
+7RPZ_H: FOUND at ae-pocketminer/results/pocketminer/7RPZ_H-preds.npy

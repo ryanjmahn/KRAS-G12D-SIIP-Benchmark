@@ -6,15 +6,19 @@ optimal symmetry-aware atom mapping.
 """
 from rdkit import Chem
 from rdkit.Chem import AllChem, rdMolAlign
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from paths import DOCKING, LIGAND
 
 # template with correct bonds/chemistry
-template = Chem.MolFromMolFile("MRTX1133_ideal.sdf", removeHs=True)
+template = Chem.MolFromMolFile(str(LIGAND / "MRTX1133_ideal.sdf"), removeHs=True)
 template = Chem.RemoveAllHs(template)
 
 # load crystal reference (coordinates only) and docked pose (coordinates only)
-crystal = Chem.MolFromPDBFile("MRTX1133_crystal_pose_aligned.pdb", removeHs=True, sanitize=False)
+crystal = Chem.MolFromPDBFile(str(LIGAND / "MRTX1133_crystal_pose_aligned.pdb"), removeHs=True, sanitize=False)
 crystal = Chem.RemoveAllHs(crystal)
-docked  = Chem.MolFromPDBFile("docked_pose1.pdb", removeHs=True, sanitize=False)
+docked  = Chem.MolFromPDBFile(str(DOCKING / "docked_pose1.pdb"), removeHs=True, sanitize=False)
 docked = Chem.RemoveAllHs(docked)
 
 print("template atoms:", template.GetNumAtoms())

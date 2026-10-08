@@ -1,108 +1,69 @@
-# SETUP GUIDE
+# Setup
 
-How to get a working environment from scratch. Learned the hard way -- follow the
-gotchas or you'll hit the same walls.
+Developed on an Apple Silicon Mac (osx-arm64). Some steps below are specific to that.
 
-Machine note: developed on Apple Silicon Mac (M-series, osx-arm64). Some fixes below
-are Apple-Silicon-specific.
+## 1. Conda environments
 
----
-
-## 0. Prereqs
-- Install Miniconda (https://docs.conda.io/en/latest/miniconda.html)
-- Clone this repo
-
-## 1. Environment: structprep (structure prep + docking + fpocket)
-
+```bash
+conda env create -f envs/structprep.yml      # ProDy, fpocket, Vina, Meeko, RDKit, Java 17
+conda env create -f envs/aepocketminer.yml   # AE-PocketMiner, TensorFlow 2.13
 ```
+
+- [ ] `conda activate structprep`, then check:
+  ```bash
+  fpocket -h
+  vina --version
+  java -version        # must show 17.x
+  ```
+
+If you'd rather build `structprep` by hand:
+
+```bash
 conda create -n structprep python=3.10
 conda activate structprep
-conda install -c conda-forge pymol-open-source pdb2pqr fpocket rdkit scipy gemmi
+conda install -c conda-forge pymol-open-source pdb2pqr fpocket rdkit scipy gemmi vina openjdk=17
 pip install meeko prody spyrmsd
-conda install -c conda-forge vina
-conda install -c conda-forge openjdk=17     # for P2Rank -- MUST be 17
 ```
 
-Verify:
-```
-pymol -cq -d "print('pymol ok')"
-fpocket -h
-vina --version
-mk_prepare_ligand.py --help
-java -version        # must show 17.x
-```
+## 2. P2Rank 2.4.2
 
-## 2. Environment: aepocketminer (PocketMiner)
+- [ ] Download from https://github.com/rdk/p2rank/releases and unpack it in the repo root, so `p2rank_2.4.2/prank` exists.
+- [ ] **Run it with Java 17 from the activated `structprep` env.** Newer Java fails with "Unsupported class file major version 69". With no Java on the path at all, `phase3_p2rank.py` crashes with a `UnicodeDecodeError` from macOS's "Unable to locate a Java Runtime" message.
+- P2Rank often ranks the nucleotide site above the SII-P. That's expected, and the 14 Å-from-His95 rule handles it.
 
-Clone the PocketMiner repo (Bowman Lab -- ae-pocketminer). Then:
-```
-cd ae-pocketminer
-# EDIT environment.yml: delete the cudatoolkit line (no NVIDIA GPU on Mac)
-conda env create -f environment.yml
-conda activate aepocketminer
-pip install "tensorflow==2.13.0"   # pinned 2.10 doesn't exist on osx-arm64
-pip install pyyaml                 # missing dependency
-```
+## 3. AE-PocketMiner
 
-**REQUIRED CODE FIX** in `src/xtal_predict.py`:
-```
-# change this line:
-opt = tf.keras.optimizers.Adam()
-# to:
-opt = tf.keras.optimizers.legacy.Adam()
-```
-(Without this, the checkpoint won't load on TF 2.13.)
+- [ ] Clone the Bowman Lab `ae-pocketminer` repo into the repo root.
+- [ ] On Apple Silicon, delete the `cudatoolkit` line from its `environment.yml` (there's no NVIDIA GPU). Use `envs/aepocketminer.yml` from this repo instead if you can.
+- [ ] Use TensorFlow 2.13 (`pip install "tensorflow==2.13.0"`). The pinned 2.10 doesn't exist for osx-arm64. Also `pip install pyyaml`.
+- [ ] **Required code fix** in `ae-pocketminer/src/xtal_predict.py`. Without it the checkpoint won't load on TF 2.13:
+  ```python
+  opt = tf.keras.optimizers.Adam()          # change this
+  opt = tf.keras.optimizers.legacy.Adam()   # to this
+  ```
+- [ ] Create `ae-pocketminer/my_config.yaml` (regular model, not the attention variant):
+  ```yaml
+  nn_path: /ABSOLUTE/PATH/TO/KRASG12DBenchmarking/ae-pocketminer/models/pocketminer
+  input_pdb_directory: inputs
+  output_directory: results/pocketminer
+  use_attention: False
+  debug: False
+  ```
+- [ ] Run it on the ladder conformers and the two anchors:
+  ```bash
+  conda activate aepocketminer
+  cd ae-pocketminer
+  cp ../runs/ladder_dense/dense_*.pdb ../data/structures/5US4_H.pdb ../data/structures/7RPZ_H.pdb inputs/
+  python src/xtal_predict.py my_config.yaml
+  ```
+  Output is `results/pocketminer/<name>-preds.npy`, one probability per residue.
 
-Run PocketMiner (regular, not attention variant):
-- put input PDBs in an `inputs/` folder
-- make a config (my_config.yaml):
-```
-nn_path: /ABSOLUTE/PATH/TO/ae-pocketminer/models/pocketminer
-input_pdb_directory: inputs
-output_directory: results/pocketminer
-use_attention: False
-debug: False
-```
-- run: `python src/xtal_predict.py my_config.yaml`
-- output: results/pocketminer/<name>-preds.npy  (per-residue cryptic probability)
+## 4. Gotchas
 
-## 3. Tool: P2Rank (default)
+- **Check which env you're in.** A new terminal starts in `(base)`. Pocket scripts and P2Rank need `structprep`. AE-PocketMiner needs `aepocketminer`. "command not found" or "No module named X" almost always means the wrong env.
+- **Docking RMSD:** strip all hydrogens from both poses, assign bonds from `MRTX1133_ideal.sdf`, and use RDKit's symmetry-aware `GetBestRMS`. A naive PyMOL `rms_cur` mispairs atoms and inflates the number (it reported 5–6 Å; the true value is 0.96 Å). See `src/phase1_validation/rmsd_check.py`.
+- **PyMOL vs terminal:** PyMOL commands (`load`, `align`, `iterate`) go in the PyMOL command line. Shell commands (`conda`, `fpocket`, `vina`, `python`) go in the terminal.
 
-Download release from https://github.com/rdk/p2rank/releases (v2.4.2 used here).
-```
-tar -xzf p2rank_2.4.2.tar.gz
-cd p2rank_2.4.2
-# make sure Java 17 is active (conda activate structprep)
-./prank predict -f ../7RPZ_H.pdb
-```
-GOTCHA: needs Java 17. Newer Java gives "Unsupported class file major version 69".
-Output: test_output/predict_<name>/<name>_predictions.csv
-The SII-P is identified by which predicted pocket's residues include His95 + switch-II
-(58-72). Note: P2Rank often ranks the nucleotide site above the SII-P.
+## Where things go
 
-## 4. Tool: fpocket (already in structprep)
-```
-fpocket -f 7RPZ_H.pdb
-# creates 7RPZ_H_out/ with *_info.txt listing each pocket's Volume + Druggability
-```
-Identify the SII-P = the pocket whose alpha spheres (resn STP) cluster near His95.
-
----
-
-## The environment trap (READ THIS)
-conda environments are per-terminal-session. A new terminal starts in (base).
-ALWAYS check your prompt shows the right env before running:
-- structprep: pymol, fpocket, vina, meeko, rdkit, java, pdb2pqr
-- aepocketminer: pocketminer, tensorflow
-If you get "command not found" or "No module named X", you're probably in the wrong env.
-
-## PyMOL vs terminal
-- PyMOL commands (load, align, get_distance, iterate) -> the PyMOL window's command line
-- shell commands (conda, fpocket, vina, python) -> the terminal (or VS Code terminal)
-Typing one in the other does nothing / errors.
-
-## RMSD measurement gotcha (validation gate)
-Comparing a docked ligand to a crystal ligand: strip ALL hydrogens from both
-(Chem.RemoveAllHs), match heavy-atom graphs, and use rdMolAlign.GetBestRMS
-(symmetry-aware). Naive PyMOL rms_cur mispairs atoms and inflates the number
-(we saw fake 5-6 A; true value was 0.96 A). See rmsd_check.py.
+Tools (`p2rank_2.4.2/`, `ae-pocketminer/`) and everything generated (`runs/`, fpocket `*_out/` folders, `*.npy`) are gitignored. File locations used by the scripts are set in `src/paths.py`.

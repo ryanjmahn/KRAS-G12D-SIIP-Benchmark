@@ -11,10 +11,14 @@ Independent of every benchmarked tool.
 """
 from prody import *
 import numpy as np
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from paths import ANSWER_KEY, LIGAND, OLD_LADDER_PDBS, STRUCTURES
 
 # ---- load holo receptor (aligned frame) + aligned ligand ----
-holo = parsePDB('7RPZ_H.pdb')                          # aligned receptor
-lig  = parsePDB('MRTX1133_crystal_pose_aligned.pdb')   # aligned ligand (44 heavy atoms)
+holo = parsePDB(str(STRUCTURES / '7RPZ_H.pdb'))                          # aligned receptor
+lig  = parsePDB(str(LIGAND / 'MRTX1133_crystal_pose_aligned.pdb'))   # aligned ligand (44 heavy atoms)
 
 lig_coords = lig.getCoords()
 lig_center = lig_coords.mean(axis=0)
@@ -42,7 +46,9 @@ print("2. TRUE LIGAND POSITION (MRTX1133 center, DCA reference):")
 print(f"   center = ({lig_center[0]:.2f}, {lig_center[1]:.2f}, {lig_center[2]:.2f})")
 
 # ===== 3. LADDER VALIDATION: conf 11 switch-II RMSD vs 7RPZ =====
-conf11 = parsePDB('ladder/lad_11.pdb')
+# Item 3 uses the superseded 12-conformer ladder; the dense-ladder check (4.21 A)
+# is recorded by hand in the answer-key file.
+conf11 = parsePDB(str(OLD_LADDER_PDBS / 'lad_11.pdb'))
 s2_conf = conf11.select('resnum 65 to 76 and name CA')
 s2_holo = holo.select('resnum 65 to 76 and name CA')
 
@@ -62,7 +68,8 @@ else:
     if s2_holo: print("   7RPZ switch-II CAs:", s2_holo.numAtoms())
 
 # ---- save the answer keys ----
-with open('answer_key_siip_residues.txt','w') as f:
+# NOTE: overwrites the hand-annotated lines at the end of the committed file.
+with open(ANSWER_KEY / 'answer_key_siip_residues.txt','w') as f:
     f.write("# True SII-P residues (within 4.5 A of MRTX1133 in 7RPZ)\n")
     f.write("# Gold standard for precision/recall/MCC in Phase 3\n")
     f.write(",".join(str(r) for r in true_residues) + "\n")

@@ -1,0 +1,4 @@
+cluster,n_conformers,volume_min,volume_max,n_detected,mean_recall_when_detected
+closed (~280),10,269.3,290.1,7,0.329
+intermediate (~400),5,392.6,408.3,5,0.33
+open (~720),9,694.1,750.2,5,0.41

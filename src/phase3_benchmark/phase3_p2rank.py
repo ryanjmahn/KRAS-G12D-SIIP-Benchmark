@@ -8,6 +8,10 @@ their residues, and score vs the answer key.
 """
 from prody import *
 import numpy as np, os, subprocess, csv, glob
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from paths import LADDER_CSV, LADDER_PDBS, P2RANK_LADDER_OUT, PRANK, RESULTS
 
 TRUE_ALL=[9,10,11,12,16,58,59,60,61,62,63,64,65,68,69,72,78,88,92,95,96,99,100,102,103]
 MISSING={60,61,62,63,64}
@@ -15,12 +19,12 @@ TRUE_PRESENT=[r for r in TRUE_ALL if r not in MISSING]
 LIG_CENTER=np.array([-36.787,37.918,9.395])
 
 # P2Rank location
-PRANK = './p2rank_2.4.2/prank'
+PRANK = str(PRANK)
 
 openness={}
-with open('ladder_dense.csv') as f:
+with open(LADDER_CSV) as f:
     for row in csv.DictReader(f):
-        c=int(row['conf']); openness[c]=float(row['switch2_rmsd']) if row['switch2_rmsd'] else 0.0
+       c = int(row['conf']); openness[c] = float(row['siip_volume']) if row['siip_volume'] else 0.0
 
 def run_p2rank(pdbpath, outdir):
     # run P2Rank predict; -o sets output dir
@@ -60,8 +64,8 @@ def parse_predictions(csvpath):
 
 def analyze(pdbpath, near_radius=14.0):
     base=os.path.basename(pdbpath).replace('.pdb','')
-    outdir=f'p2rank_out/{base}'
-    os.makedirs('p2rank_out', exist_ok=True)
+    outdir=str(P2RANK_LADDER_OUT / base)
+    os.makedirs(P2RANK_LADDER_OUT, exist_ok=True)
     run_p2rank(pdbpath, outdir)
     # find the predictions csv
     pred_csv=None
@@ -103,25 +107,26 @@ def analyze(pdbpath, near_radius=14.0):
     return dict(n_frag=n_frag,dca=dca,best_rank=best_rank,best_single=best_single,
                 precision=prec,recall=rec,f1=f1,mcc=mcc)
 
-print("PHASE 3 — P2Rank (union scoring + fragmentation)")
-print("conf | open | #frag | top_rank | DCA | union_rec | best1_rec | MCC")
-print("-"*68)
-rows=[]
-for c in range(24):
-    p=f'ladder_dense/dense_{c:02d}.pdb'
-    r=analyze(p); o=openness.get(c,0.0)
-    if r:
-        print(f" {c:2d}  | {o:.2f} |   {r['n_frag']}   |   {r['best_rank']:>2}     | {r['dca']:4.1f}| {r['recall']:.2f}      | {r['best_single']:.2f}      | {r['mcc']:.2f}")
-        rows.append((c,o,r))
-    else:
-        print(f" {c:2d}  | {o:.2f} |   -   |    -     |  -  |  -        |  -        |  -")
-        rows.append((c,o,None))
-
-with open('phase3_p2rank.csv','w') as f:
-    f.write("conf,openness,n_fragments,top_rank,dca,union_precision,union_recall,union_f1,union_mcc,best_single_recall\n")
-    for c,o,r in rows:
+if __name__ == "__main__":
+    print("PHASE 3 — P2Rank (union scoring + fragmentation)")
+    print("conf | open | #frag | top_rank | DCA | union_rec | best1_rec | MCC")
+    print("-"*68)
+    rows=[]
+    for c in range(24):
+        p=str(LADDER_PDBS / f'dense_{c:02d}.pdb')
+        r=analyze(p); o=openness.get(c,0.0)
         if r:
-            f.write(f"{c},{o},{r['n_frag']},{r['best_rank']},{r['dca']:.2f},{r['precision']:.3f},{r['recall']:.3f},{r['f1']:.3f},{r['mcc']:.3f},{r['best_single']:.3f}\n")
+            print(f" {c:2d}  | {o:.2f} |   {r['n_frag']}   |   {r['best_rank']:>2}     | {r['dca']:4.1f}| {r['recall']:.2f}      | {r['best_single']:.2f}      | {r['mcc']:.2f}")
+            rows.append((c,o,r))
         else:
-            f.write(f"{c},{o},,,,,,,,\n")
-print("\nSaved phase3_p2rank.csv")
+            print(f" {c:2d}  | {o:.2f} |   -   |    -     |  -  |  -        |  -        |  -")
+            rows.append((c,o,None))
+
+    with open(RESULTS / 'phase3_p2rank.csv','w') as f:
+        f.write("conf,openness,n_fragments,top_rank,dca,union_precision,union_recall,union_f1,union_mcc,best_single_recall\n")
+        for c,o,r in rows:
+            if r:
+                f.write(f"{c},{o},{r['n_frag']},{r['best_rank']},{r['dca']:.2f},{r['precision']:.3f},{r['recall']:.3f},{r['f1']:.3f},{r['mcc']:.3f},{r['best_single']:.3f}\n")
+            else:
+                f.write(f"{c},{o},,,,,,,,\n")
+    print("\nSaved phase3_p2rank.csv")

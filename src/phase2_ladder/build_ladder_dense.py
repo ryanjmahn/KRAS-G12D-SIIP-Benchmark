@@ -10,10 +10,14 @@ where conf 0-11 stayed intact before. No tearing, more points, hits the
 """
 from prody import *
 import numpy as np, os, subprocess
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from paths import LADDER_CSV, LADDER_PDBS, STRUCTURES
 
-os.makedirs('ladder_dense', exist_ok=True)
+os.makedirs(LADDER_PDBS, exist_ok=True)
 
-full = parsePDB('5US4_H.pdb')
+full = parsePDB(str(STRUCTURES / '5US4_H.pdb'))
 calphas = full.select('protein and name CA')
 anm = ANM('5US4'); anm.buildHessian(calphas); anm.calcModes(n_modes=10)
 evec = anm[0].getEigvec().reshape(-1, 3)
@@ -86,22 +90,23 @@ def stable_vol_and_rmsd(pdbpath, radius=14.0):
             vol=max(nv) if nv else None
     return s2rmsd, vol
 
-print("conf | CA-RMSD | switchII-RMSD (axis) | SII-P vol | intact")
-print("-"*62)
-rows=[]
-for k,tr in enumerate(target_rmsds):
-    alpha=tr/rms_per_unit_alpha if rms_per_unit_alpha>0 else 0
-    p=f'ladder_dense/dense_{k:02d}.pdb'
-    maxd=build_full(alpha,p)
-    s2r,vol=stable_vol_and_rmsd(p)
-    intact="yes" if maxd<12 else "TORN"
-    vs=f"{vol:.1f}" if vol else "n/a"
-    s2s=f"{s2r:.2f}" if s2r is not None else "n/a"
-    print(f"  {k:2d} |  {tr:.2f}   |      {s2s:>5}        |  {vs:>6}  | {intact}")
-    rows.append((k,tr,s2r,vol,maxd))
+if __name__ == "__main__":
+    print("conf | CA-RMSD | switchII-RMSD (axis) | SII-P vol | intact")
+    print("-"*62)
+    rows=[]
+    for k,tr in enumerate(target_rmsds):
+        alpha=tr/rms_per_unit_alpha if rms_per_unit_alpha>0 else 0
+        p=str(LADDER_PDBS / f'dense_{k:02d}.pdb')
+        maxd=build_full(alpha,p)
+        s2r,vol=stable_vol_and_rmsd(p)
+        intact="yes" if maxd<12 else "TORN"
+        vs=f"{vol:.1f}" if vol else "n/a"
+        s2s=f"{s2r:.2f}" if s2r is not None else "n/a"
+        print(f"  {k:2d} |  {tr:.2f}   |      {s2s:>5}        |  {vs:>6}  | {intact}")
+        rows.append((k,tr,s2r,vol,maxd))
 
-with open('ladder_dense.csv','w') as f:
-    f.write("conf,target_ca_rmsd,switch2_rmsd,siip_volume,max_disp\n")
-    for r in rows:
-        f.write(f"{r[0]},{r[1]:.3f},{r[2] if r[2] else ''},{r[3] if r[3] else ''},{r[4]:.2f}\n")
-print("\nSaved ladder_dense.csv + ladder_dense/dense_*.pdb (24 conformers)")
+    with open(LADDER_CSV,'w') as f:
+        f.write("conf,target_ca_rmsd,switch2_rmsd,siip_volume,max_disp\n")
+        for r in rows:
+            f.write(f"{r[0]},{r[1]:.3f},{r[2] if r[2] else ''},{r[3] if r[3] else ''},{r[4]:.2f}\n")
+    print("\nSaved ladder_dense.csv + ladder_dense/dense_*.pdb (24 conformers)")
