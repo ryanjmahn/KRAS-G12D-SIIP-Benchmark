@@ -1,12 +1,16 @@
+<div align="center">
+
 # KRAS G12D Cryptic-Pocket Benchmark
 
 Geometry outperforms machine learning on an open cryptic pocket.
 
-This project benchmarks three pocket-prediction tools that run without molecular dynamics (MD) on the KRAS G12D Switch-II pocket (SII-P). The SII-P is a cryptic pocket: it only forms when a drug binds, and it is the site of the G12D inhibitor MRTX1133. The tools are fpocket (pure geometry), P2Rank (general-purpose machine learning) and AE-PocketMiner (a graph neural network trained specifically for cryptic pockets). Each tool was run on the closed and open crystal structures and on a 24-conformer closed-to-open ladder, and scored against the residues MRTX1133 actually touches.
-
 **fpocket on the open structure (7RPZ): recall 0.92, MCC 0.95**
 
-**Status:** Experiment complete. Manuscript under review at the Columbia Junior Science Journal (CJSJ). [Read the paper](docs/paper.pdf)
+Experiment complete · CJSJ quarterfinalist, still under review · [Read the paper](docs/paper.pdf)
+
+</div>
+
+This project benchmarks three pocket-prediction tools that run without molecular dynamics (MD) on the KRAS G12D Switch-II pocket (SII-P). The SII-P is a cryptic pocket: it only forms when a drug binds, and it is the site of the G12D inhibitor MRTX1133. The tools are fpocket (pure geometry), P2Rank (general-purpose machine learning) and AE-PocketMiner (a graph neural network trained specifically for cryptic pockets). Each tool was run on the closed and open crystal structures and on a 24-conformer closed-to-open ladder, and scored against the residues MRTX1133 actually touches.
 
 ## Why
 
@@ -33,7 +37,7 @@ Two high-resolution KRAS G12D crystal structures, both GDP-bound, so the only di
 - SII-P volume rose from ~269 Å³ to ~750 Å³, **91% of the open crystal structure**.
 - The opening is not gradual. Conformers fall into three volume clusters, and the jump from ~400 Å³ to ~750 Å³ at conformer 15 is where the Switch-II wall forms.
 
-![SII-P volume across the two crystal structures and the ends of the ladder](figures/fig1_volume.png)
+<p align="center"><img src="figures/fig1_volume.png" alt="SII-P volume across the two crystal structures and the ends of the ladder" width="560"></p>
 
 ## Phase 3: Benchmarking the three tools
 
@@ -54,11 +58,11 @@ All three tools were scored on the same residue set (chain A) with the same rule
 - On closed 5US4, P2Rank correctly proposed no pocket at the site. fpocket produced false positives.
 - AE-PocketMiner flagged broadly on both structures. Its mean probability on true SII-P residues was 0.606 against 0.514 protein-wide on 7RPZ, and 0.537 against 0.514 on 5US4. Because this check uses no cutoff and both structures are experimental, the broad flagging is not caused by the 0.7 threshold or by the generated conformers.
 
-![MCC of each tool on the open and closed crystal structures](figures/fig2_anchor_mcc.png)
+<p align="center"><img src="figures/fig2_anchor_mcc.png" alt="MCC of each tool on the open and closed crystal structures" width="560"></p>
 
 **Across the 24-conformer ladder**, the ordering changes. P2Rank has the highest mean MCC (0.41 ± 0.27), followed by fpocket (0.27 ± 0.07) and AE-PocketMiner (0.08 ± 0.03), even though AE-PocketMiner has the highest mean recall.
 
-![Mean recall and MCC across the ladder](figures/fig4_mean_performance.png)
+<p align="center"><img src="figures/fig4_mean_performance.png" alt="Mean recall and MCC across the ladder" width="560"></p>
 
 P2Rank found no pocket within 14 Å of the site in 7 of 24 conformers:
 
@@ -75,7 +79,7 @@ P2Rank found no pocket within 14 Å of the site in 7 of 24 conformers:
 - **Detection rate alone gives the wrong answer.** By detection rate, AE-PocketMiner would look successful and P2Rank would look like it failed on the closed structure. Both readings are backwards. Localization metrics (MCC, precision, distance to the ligand), computed from the same data, correct them.
 - **Volume is necessary but not sufficient.** Four of P2Rank's misses were at open-state volume while their same-volume neighbours were detected. Once the Switch-II wall is present, detection depends more on local side-chain arrangement than on pocket size. Where P2Rank did detect the site, its predicted centre moved from ~4.4 Å from the ligand in the closed cluster to 3.4–3.9 Å in the open one.
 
-![P2Rank distance from predicted pocket centre to the ligand, against pocket volume](figures/fig5_dca_vs_volume.png)
+<p align="center"><img src="figures/fig5_dca_vs_volume.png" alt="P2Rank distance from predicted pocket centre to the ligand, against pocket volume" width="560"></p>
 
 Every arm, including the two crystal structures, was re-scored through the same scoring code before the paper was written. An earlier comparison that had not been scored that way was retired as a result, and none of its numbers appear here.
 
@@ -85,6 +89,32 @@ Every arm, including the two crystal structures, was re-scored through the same 
 - fpocket is both a benchmarked tool and the source of the openness axis. Scoring is unaffected because the answer key comes from the drug's contacts, but the axis is not independent of that tool.
 - AE-PocketMiner's broad flagging may be specific to KRAS, which is flexible in several regions.
 - This is one pocket on one target, so the ranking should not be generalized.
+
+## Next step: a multi-target evaluation
+
+The main limitation above is that this is one target. The follow-up, planned as the next stage of this repo, asks whether "the cryptic-pocket specialist doesn't beat the general tools" holds across many cryptic pockets or is specific to KRAS.
+
+- **More targets:** about 15–25 apo/holo cryptic-pocket pairs drawn from CryptoBench, the PocketMiner set and CryptoSite, with KRAS G12D as the anchor. Each pair needs a known bound ligand, resolution better than about 2.5 Å, and matching construct and oligomeric state between apo and holo.
+- **One scoring layer for every tool:** adapters convert each tool's native output (fpocket pockets, P2Rank residue lists, per-residue probabilities) into the same predicted-residue set. Detection and localization are then scored separately, because this study showed that detection alone gives the wrong ranking. Probability tools are scored across a threshold sweep and with a threshold-independent measure.
+- **Statistics across targets:** paired tests, effect sizes and confidence intervals, plus a check of whether each tool's failure mode (fragmentation, over-spreading, offset) recurs on other targets.
+- **Optional conformational axis:** the closed-to-open ladder from Phase 2, applied to the targets that support it.
+- **Sanity gate first:** the new pipeline must reproduce this repo's KRAS results before it is run on the full panel.
+
+How it differs from existing benchmarks such as CryptoBench, which measures detection accuracy on mixed targets: it ties detection to localization quality, audits how heterogeneous tool outputs are compared, and looks at behaviour across conformational states.
+
+**Build plan**
+
+1. Assemble the target panel and a manifest, starting with about 5 targets including KRAS.
+2. Prepare every structure the same way (chain selection, protonation at pH 7.4, waters stripped), reusing the KRAS prep.
+3. Run fpocket, P2Rank and AE-PocketMiner on each structure, keeping their raw outputs untouched for auditing.
+4. Write and unit-test the output adapters against the KRAS outputs.
+5. Build the unified scoring layer and pass the KRAS sanity gate.
+6. Scale to the full panel of about 15–25 targets.
+7. Run statistics across targets and tag each tool's failure modes.
+8. Optionally, score the conformational ladder on the subset of targets that support one.
+9. Make the figures and a reproducibility bundle (code, configs, manifest).
+
+**Target venues (2027):** ICML and NeurIPS workshops first; the main track of an IEEE bioinformatics conference second.
 
 ## Repo layout
 
