@@ -90,9 +90,13 @@ Every arm, including the two crystal structures, was re-scored through the same 
 - AE-PocketMiner's broad flagging may be specific to KRAS, which is flexible in several regions.
 - This is one pocket on one target, so the ranking should not be generalized.
 
-## Next step: a multi-target evaluation
+## Next steps: diagnose, then treat
 
-The main limitation above is that this is one target. The follow-up, planned as the next stage of this repo, asks whether "the cryptic-pocket specialist doesn't beat the general tools" holds across many cryptic pockets or is specific to KRAS.
+The follow-up is two projects in sequence. **Project 1** (diagnosis) tests whether the KRAS findings hold across many cryptic pockets and turns the scoring used here into a protocol that works for any tool's output. **Project 2** (treatment) builds a small layer on top of existing tools to fix the main failure Project 1 finds. Project 1's target panel, scoring layer and baseline outputs become Project 2's training data, evaluation harness and inputs, so the panel is chosen with clean train/test splits in mind from the start.
+
+### Project 1: multi-target evaluation
+
+The main limitation above is that this is one target. Project 1 asks whether "the cryptic-pocket specialist doesn't beat the general tools" holds across many cryptic pockets or is specific to KRAS.
 
 - **More targets:** about 15–25 apo/holo cryptic-pocket pairs drawn from CryptoBench, the PocketMiner set and CryptoSite, with KRAS G12D as the anchor. Each pair needs a known bound ligand, resolution better than about 2.5 Å, and matching construct and oligomeric state between apo and holo.
 - **One scoring layer for every tool:** adapters convert each tool's native output (fpocket pockets, P2Rank residue lists, per-residue probabilities) into the same predicted-residue set. Detection and localization are then scored separately, because this study showed that detection alone gives the wrong ranking. Probability tools are scored across a threshold sweep and with a threshold-independent measure.
@@ -114,7 +118,33 @@ How it differs from existing benchmarks such as CryptoBench, which measures dete
 8. Optionally, score the conformational ladder on the subset of targets that support one.
 9. Make the figures and a reproducibility bundle (code, configs, manifest).
 
-**Target venues (2027):** ICML and NeurIPS workshops first; the main track of an IEEE bioinformatics conference second.
+The key output for Project 2 is the dominant failure mode across targets. The current hypothesis, based on AE-PocketMiner's behaviour here, is over-prediction (poor specificity).
+
+### Project 2: a specificity layer for existing tools
+
+The exact design is fixed only after Project 1 names the dominant failure. Assuming it is over-prediction, Project 2 adds a lightweight layer that sharpens an existing tool's predictions toward the true site, rather than training a new predictor from scratch.
+
+- **Input:** a tool's per-residue scores (for example AE-PocketMiner probabilities) plus structural context such as local geometry, burial and neighbouring scores.
+- **Candidate models, simplest first:** post-hoc calibration (isotonic, Platt or temperature scaling); a small per-residue classifier (MLP or shallow GNN) trained to suppress background false positives; or re-ranking each residue against the protein-wide score distribution, which targets the "everything looks like 0.5" problem seen on KRAS.
+- **Training signal:** residues within 4.5 Å of the holo ligand on the Project 1 panel.
+- **Splits:** strict target-level train/validation/test splits with no protein family shared across splits.
+- **Success:** higher MCC, precision and specificity than the raw tool on held-out targets without losing recall, reported with ablations and an honest account of where it does not help.
+
+### Timeline
+
+| When | Project 1 | Project 2 |
+|---|---|---|
+| Nov 2026 | Panel and evaluation-protocol spec | |
+| Dec 2026 | Pipeline and adapters; KRAS sanity gate | |
+| Jan 2027 | Run the full panel | |
+| Feb 2027 | Statistics and failure-mode diagnosis | Fix the design; build splits from the panel |
+| Mar 2027 | Writing | Build and train on the harness |
+| Apr 2027 | Submit | Iterate against baselines on held-out targets |
+| May 2027 | | Writing and submission |
+
+If this slips, Project 2 moves to the NeurIPS 2027 workshop cycle.
+
+**Target venues (2027):** ICML and NeurIPS workshops for both projects; a bioinformatics venue (such as the main track of an IEEE bioinformatics conference) for a stronger version later.
 
 ## Repo layout
 
