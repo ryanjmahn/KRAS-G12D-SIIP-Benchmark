@@ -90,61 +90,68 @@ Every arm, including the two crystal structures, was re-scored through the same 
 - AE-PocketMiner's broad flagging may be specific to KRAS, which is flexible in several regions.
 - This is one pocket on one target, so the ranking should not be generalized.
 
-## Next steps: diagnose, then treat
+## Next steps: conformation-aware cryptic-pocket prediction
 
-The follow-up is two projects in sequence. **Project 1** (diagnosis) tests whether the KRAS findings hold across many cryptic pockets and turns the scoring used here into a protocol that works for any tool's output. **Project 2** (treatment) builds a small layer on top of existing tools to fix the main failure Project 1 finds. Project 1's target panel, scoring layer and baseline outputs become Project 2's training data, evaluation harness and inputs, so the panel is chosen with clean train/test splits in mind from the start.
+Cryptic pockets are defined by motion, yet fast predictors, AE-PocketMiner included, score one static structure at a time. Recent work describes these methods as fast but qualitative, and they can miss subtle or dynamic openings. The follow-up is two projects in sequence. **Project 1** (diagnosis) tests whether the KRAS findings hold across many cryptic pockets and measures how unstable static predictions are as a pocket opens. **Project 2** (treatment) builds a predictor that reads a cheap MD-free conformational ensemble, like the Phase 2 ladder, instead of a single snapshot.
+
+Project 1 stands on its own as a result even if Project 2 underperforms. It also produces what Project 2 needs: the target panel (chosen so it splits cleanly into family-disjoint training and test sets), a structure-prep pipeline, a conformational ensemble for every target, a unified scoring layer, and the static baseline outputs to beat.
 
 ### Project 1: multi-target evaluation
 
-The main limitation above is that this is one target. Project 1 asks whether "the cryptic-pocket specialist doesn't beat the general tools" holds across many cryptic pockets or is specific to KRAS.
+The main limitation above is that this is one target. Project 1 asks whether "the cryptic-pocket specialist doesn't beat the general tools" holds across many cryptic pockets or is specific to KRAS, and whether static tools are unstable or miss openings across conformational states.
 
 - **More targets:** about 15–25 apo/holo cryptic-pocket pairs drawn from CryptoBench, the PocketMiner set and CryptoSite, with KRAS G12D as the anchor. Each pair needs a known bound ligand, resolution better than about 2.5 Å, and matching construct and oligomeric state between apo and holo.
-- **One scoring layer for every tool:** adapters convert each tool's native output (fpocket pockets, P2Rank residue lists, per-residue probabilities) into the same predicted-residue set. Detection and localization are then scored separately, because this study showed that detection alone gives the wrong ranking. Probability tools are scored across a threshold sweep and with a threshold-independent measure.
-- **Statistics across targets:** paired tests, effect sizes and confidence intervals, plus a check of whether each tool's failure mode (fragmentation, over-spreading, offset) recurs on other targets.
-- **Optional conformational axis:** the closed-to-open ladder from Phase 2, applied to the targets that support it.
+- **An ensemble for every target:** the normal-mode ladder from Phase 2 is generated for each apo structure, optionally with subsampled AlphaFold conformers. The same ensembles are Project 2's input.
+- **One scoring layer for every tool:** adapters convert each tool's native output (fpocket pockets, P2Rank residue lists, per-residue probabilities) into the same predicted-residue set. Detection and localization (precision, recall, MCC, distance to the ligand centre) are scored separately, because this study showed that detection alone gives the wrong ranking. Probability tools are scored across a threshold sweep and with a threshold-independent measure.
+- **Conformational robustness:** every static tool is scored across each target's ensemble, measuring how much its prediction shifts as the pocket opens.
+- **Statistics across targets:** paired tests, effect sizes and confidence intervals, plus a check of whether each tool's failure mode (fragmentation, over-spreading, offset, missed openings) recurs on other targets.
 - **Sanity gate first:** the new pipeline must reproduce this repo's KRAS results before it is run on the full panel.
 
-How it differs from existing benchmarks such as CryptoBench, which measures detection accuracy on mixed targets: it ties detection to localization quality, audits how heterogeneous tool outputs are compared, and looks at behaviour across conformational states.
+How it differs from existing benchmarks such as CryptoBench, which measures detection accuracy on mixed targets: it ties detection to localization quality, audits how heterogeneous tool outputs are compared, and measures behaviour across conformational states.
 
 **Build plan**
 
 1. Assemble the target panel and a manifest, starting with about 5 targets including KRAS.
 2. Prepare every structure the same way (chain selection, protonation at pH 7.4, waters stripped), reusing the KRAS prep.
 3. Run fpocket, P2Rank and AE-PocketMiner on each structure, keeping their raw outputs untouched for auditing.
-4. Write and unit-test the output adapters against the KRAS outputs.
-5. Build the unified scoring layer and pass the KRAS sanity gate.
-6. Scale to the full panel of about 15–25 targets.
-7. Run statistics across targets and tag each tool's failure modes.
-8. Optionally, score the conformational ladder on the subset of targets that support one.
-9. Make the figures and a reproducibility bundle (code, configs, manifest).
+4. Generate the MD-free ensemble for each target.
+5. Write and unit-test the output adapters against the KRAS outputs.
+6. Build the unified scoring layer and pass the KRAS sanity gate.
+7. Scale to the full panel of about 15–25 targets.
+8. Score every tool across each ensemble to measure conformational robustness.
+9. Run statistics across targets and tag each tool's failure modes.
+10. Make the figures and a reproducibility bundle (code, configs, manifest).
 
-The key output for Project 2 is the dominant failure mode across targets. The current hypothesis, based on AE-PocketMiner's behaviour here, is over-prediction (poor specificity).
+### Project 2: a conformation-aware predictor
 
-### Project 2: a specificity layer for existing tools
+Project 2 builds a predictor that combines pocket signals across a target's ensemble to find cryptic pockets that static tools miss, especially subtle openings, without running full MD.
 
-The exact design is fixed only after Project 1 names the dominant failure. Assuming it is over-prediction, Project 2 adds a lightweight layer that sharpens an existing tool's predictions toward the true site, rather than training a new predictor from scratch.
-
-- **Input:** a tool's per-residue scores (for example AE-PocketMiner probabilities) plus structural context such as local geometry, burial and neighbouring scores.
-- **Candidate models, simplest first:** post-hoc calibration (isotonic, Platt or temperature scaling); a small per-residue classifier (MLP or shallow GNN) trained to suppress background false positives; or re-ranking each residue against the protein-wide score distribution, which targets the "everything looks like 0.5" problem seen on KRAS.
-- **Training signal:** residues within 4.5 Å of the holo ligand on the Project 1 panel.
+- **Input:** the target's MD-free ensemble (normal-mode ladder, optionally with subsampled AlphaFold conformers), not a single structure.
+- **Per-conformer features:** for each conformer, each residue gets the base tools' scores (AE-PocketMiner probabilities, P2Rank, fpocket) plus local geometry, burial and conservation where available.
+- **Aggregation model (the core contribution):** a learned function that turns per-conformer residue signals into one prediction of where a pocket forms across the accessible conformations. Candidates, simplest first:
+  1. learned pooling over conformers (attention, max, or mean plus variance);
+  2. a small sequence model over the ordered ladder, with openness as the axis, to capture how the signal changes as the pocket opens;
+  3. a light GNN on each conformer followed by aggregation across conformers.
+- **Training signal:** residues within 4.5 Å of the holo ligand on the Project 1 panel. The model sees the apo-derived ensemble and predicts the known cryptic site.
 - **Splits:** strict target-level train/validation/test splits with no protein family shared across splits.
-- **Success:** higher MCC, precision and specificity than the raw tool on held-out targets without losing recall, reported with ablations and an honest account of where it does not help.
+- **Success:** beating the static baselines, especially AE-PocketMiner, on MCC, precision and recall on held-out targets, and above all on the subset with subtle openings. Partial gains are reported as they are.
+- **Ablations:** static-only versus ensemble input (does dynamics help?), ensemble size, aggregation choice and which base features matter. Compute cost is reported, since being far cheaper than full-MD methods such as FAST is part of the point.
 
 ### Timeline
 
 | When | Project 1 | Project 2 |
 |---|---|---|
-| Nov 2026 | Panel and evaluation-protocol spec | |
-| Dec 2026 | Pipeline and adapters; KRAS sanity gate | |
-| Jan 2027 | Run the full panel | |
-| Feb 2027 | Statistics and failure-mode diagnosis | Fix the design; build splits from the panel |
-| Mar 2027 | Writing | Build and train on the harness |
-| Apr 2027 | Submit | Iterate against baselines on held-out targets |
+| Nov 2026 | Panel, evaluation-protocol spec and ensemble plan | |
+| Dec 2026 | Pipeline, ensemble generation and adapters; KRAS sanity gate | |
+| Jan 2027 | Run the full panel (static scores, ensembles, robustness) | |
+| Feb 2027 | Statistics and failure-mode diagnosis | Start building the aggregation model |
+| Mar 2027 | Writing | Train and evaluate against static baselines on held-out targets |
+| Apr 2027 | Submit | Ablations and iteration |
 | May 2027 | | Writing and submission |
 
-If this slips, Project 2 moves to the NeurIPS 2027 workshop cycle.
+If this runs long, Project 2 moves to the NeurIPS 2027 workshop cycle.
 
-**Target venues (2027):** ICML and NeurIPS workshops for both projects; a bioinformatics venue (such as the main track of an IEEE bioinformatics conference) for a stronger version later.
+**Target venues (2027):** ICML and NeurIPS evaluation or molecular-ML workshops for both projects; a bioinformatics venue such as IEEE BIBM for a stronger version of Project 2 later.
 
 ## Repo layout
 
