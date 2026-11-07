@@ -1,0 +1,37 @@
+target_id,apo_pdb_id,apo_chain,holo_pdb_id,holo_chain,ligand,source,split,justification
+kras_g12d_siip,5us4,A,7rpz,A,6IC,this_repo,anchor,Anchor target from the KRAS G12D SII-P benchmark; answer key in data/ANSWERKEY_DO_NOT_USE_AS_LADDER_INPUT/
+4r0x_7b9y,4r0x,A,7b9y,A,T5B,cryptobench,test,FKBP51 (FKBP5) with drug-like ligand T5B; FKBP51 is a drug target in stress-related disorders; very high resolution (1.20/1.35 Å).
+3k01_3k02,3k01,A,3k02,A,TXT,cryptobench,test,Solute receptor GacH with an acarbose-derived ligand; large 26-residue pocket; binding-protein class (opening between two lobes).
+3rwv_2evl,3rwv,A,2evl,A,EIC,cryptobench,test,Glycolipid transfer protein with galactosylceramide; lipid tunnel whose binding depends on acyl-chain structure (primary paper).
+5igh_5igi,5igh,A,5igi,A,ZIT,cryptobench,test,"Macrolide 2'-phosphotransferase with azithromycin; antibiotic-resistance enzyme, approved drug as ligand."
+1kx9_1n8v,1kx9,A,1n8v,B,BDD,cryptobench,test,Moth chemosensory protein with bromo-dodecanol; primary paper reports drastic conformational change on binding (large-opening case).
+6bty_6bu0,6bty,B,6bu0,C,IHP,cryptobench,test,"PI3K-C2α C2 domain with IP6; small 9-residue pocket, tests subtle openings (G4); anionic, not drug-like ligand."
+4mwi_6o5z,4mwi,A,6o5z,B,LN4,cryptobench,test,MLKL pseudokinase domain with a necroptosis inhibitor; active drug-discovery target.
+3st6_3rv6,3st6,C,3rv6,B,RVA,cryptobench,test,M. tuberculosis salicylate synthase MbtI with inhibitor; primary paper highlights active-site flexibility; anti-TB target.
+4kmy_4kn0,4kmy,A,4kn0,A,MTX,cryptobench,test,Folate receptor β with methotrexate (approved drug).
+6g6y_3zcw,6g6y,A,3zcw,A,4A2,cryptobench,test,Eg5/KIF11 with inhibitor in a newly described allosteric pocket (structure title); anticancer target.
+2i3r_2i4g,2i3r,A,2i4g,A,UA1,cryptobench,test,PTPβ catalytic domain with inhibitor; phosphatase drug-discovery target.
+5tvi_7w9a,5tvi,V,7w9a,A,DAO,cryptobench,test,"Plant non-specific lipid transfer protein with lauric acid; hydrophobic cavity, lipid-displacement dynamics (primary paper)."
+1pu5_2ag2,1pu5,C,2ag2,B,CH5,cryptobench,test,GM2 activator protein with phosphatidylcholine; lipid-binding cavity.
+4ikv_4ikz,4ikv,A,4ikz,A,AFS,cryptobench,test,Peptide transporter POT with alafosfalin; only membrane protein in the panel. CHECK: holo is E310Q mutant; membrane prep may need extra care.
+8aqi_7snw,8aqi,B,7snw,B,9YR,cryptobench,test,NanoLuc luciferase with inhibitor; engineered reporter protein; structure unpublished (no primary paper).
+2d05_5hwa,2d05,A,5hwa,A,GCS,cryptobench,test,GH-46 chitosanase with chitotetraose substrate.
+2rfj_7bjy,2rfj,B,7bjy,A,79C,cryptobench,test,BRDT first bromodomain with Ro3280; BET bromodomain drug target.
+1kxr_2g8j,1kxr,A,2g8j,A,D7G,cryptobench,test,Calpain-1 protease core with α-ketoamide inhibitor SNJ-1945; protease drug target.
+1xgd_2pdf,1xgd,A,2pdf,A,ZST,cryptobench,test,"Aldose reductase with zopolrestat; induced-fit specificity pocket, diabetic-complication target. CHECK: holo is L300P mutant."
+1zm0_2i5c,1zm0,A,2i5c,B,IP5,cryptobench,test,"Pleckstrin C-terminal PH domain with inositol pentakisphosphate; small 10-residue pocket; lipid-headgroup site, not drug-like."
+3idh_4no7,3idh,A,4no7,A,2N8,cryptobench,test,"Glucokinase with a nanomolar allosteric activator; allosteric site, diabetes target."
+2phz_2xuz,2phz,A,2xuz,A,EB4,cryptobench,test,Siderophore-binding protein FeuA with a triscatecholate siderophore.
+3n4u_6cd7,3n4u,A,6cd7,B,EDS,cryptobench,test,"Aminoglycoside phosphotransferase APH(2'') with plazomicin (approved antibiotic); resistance enzyme. CHECK: holo title names APH(2'')-IVa, apo is -Id."
+4fkm_4fil,4fkm,B,4fil,A,0UE,cryptobench,test,S. aureus FhuD2 with ferrioxamine B; primary paper reports multiple unliganded conformations (apo-state variability).
+7x0f_7x0e,7x0f,A,7x0e,A,7Z8,cryptobench,test,NRPS AmbB condensation domain with substrate 7Z8. CHECK: holo 7X0E is titled 'apo form'; confirm the ligand is present.
+1xqv_1xro,1xqv,A,1xro,A,LEU,cryptobench,test,Tricorn-interacting factor F1 with Phe-Leu peptide (LEU); not drug-like. CHECK: holo is E213Q mutant; candidate to drop.
+1x2g_4tvy,1x2g,C,4tvy,B,37R,cryptobench,test,"Lipoate-protein ligase A engineered as a resorufin ligase, with 37R. CHECK: holo 4TVY is titled 'Apo resorufin ligase'; confirm the ligand."
+3nx1_3nx2,3nx1,B,3nx2,A,FER,cryptobench,test,Ferulic acid decarboxylase with a substrate analogue.
+1k47_3gon,1k47,D,3gon,A,PMV,cryptobench,test,Phosphomevalonate kinase with phosphomevalonate (ternary complex with AMP-PNP).
+2pkf_2pkk,2pkf,A,2pkk,A,2FA,cryptobench,test,M. tuberculosis adenosine kinase (dimer) with 2-fluoroadenosine; nucleoside-analogue ligand; anti-TB target.
+5b0e_5b09,5b0e,B,5b09,A,4MX,cryptobench,test,Cannabis olivetolic acid cyclase (dimer) with its product olivetolic acid.
+3t8b_3t8a,3t8b,A,3t8a,B,S0N,cryptobench,test,M. tuberculosis MenB (hexamer) with substrate analogue; largest assembly in the panel.
+1evy_1n1e,1evy,A,1n1e,B,NDE,cryptobench,test,"Leishmania glycerol-3-phosphate dehydrogenase (dimer); primary paper reports conformational change on binding; 32-residue pocket, largest in panel."
+4zoe_4zoa,4zoe,B,4zoa,A,IFM,cryptobench,test,"Listeria β-glucosidase (dimer) with isofagomine, a glycosidase inhibitor."
+6w10_8hch,6w10,A,8hch,A,URI,cryptobench,test,TREX1 exonuclease (dimer) with uridine; nucleoside ligand.

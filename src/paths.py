@@ -10,6 +10,10 @@ DOCKING = DATA / "docking"
 LADDER_CSV = DATA / "ladder" / "ladder_dense.csv"
 ANSWER_KEY = DATA / "ANSWERKEY_DO_NOT_USE_AS_LADDER_INPUT"
 
+# Multi-target extension (FINAL_research_roadmap.md)
+CRYPTOBENCH = DATA / "cryptobench"          # raw/ is downloaded (gitignored); pairs.csv is derived
+CURATED = DATA / "curated_subset"           # candidates.csv (generated), manifest.csv (hand-picked)
+
 RESULTS = ROOT / "results"
 FIGURES = ROOT / "figures"
 

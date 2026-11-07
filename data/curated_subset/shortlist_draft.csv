@@ -1,0 +1,36 @@
+apo_pdb_id,apo_chain,holo_pdb_id,holo_chain,ligand,ligand_class,n_pocket_residues,apo_resolution,holo_resolution,apo_oligomer,apo_pfam,length_mismatch,apo_protein
+4r0x,A,7b9y,A,T5B,drug-like,21,1.2,1.35,Monomer,PF00254,False,Peptidyl-prolyl cis-trans isomerase FKBP5
+3k01,A,3k02,A,TXT,drug-like,26,1.35,1.55,Monomer,PF01547,False,Acarbose/maltose binding protein GacH
+3rwv,A,2evl,A,EIC,drug-like,18,1.5,2.2,Monomer,PF08718,False,Glycolipid transfer protein
+5igh,A,5igi,A,ZIT,drug-like,24,1.55,1.2,Monomer,,False,Macrolide 2'-phosphotransferase
+1kx9,A,1n8v,B,BDD,drug-like,14,1.65,1.39,Monomer,,False,CHEMOSENSORY PROTEIN A6
+6bty,B,6bu0,C,IHP,drug-like,9,1.678,2.427,Monomer,PF00168,False,Phosphatidylinositol 4-phosphate 3-kinase C2 domain-containing subunit alpha
+4mwi,A,6o5z,B,LN4,drug-like,25,1.7,2.285,Monomer,PF07714,False,Mixed lineage kinase domain-like protein
+3st6,C,3rv6,B,RVA,drug-like,17,1.75,2.04,Monomer,PF00425,False,Isochorismate synthase/isochorismate-pyruvate lyase mbtI
+4kmy,A,4kn0,A,MTX,drug-like,16,1.795,2.1,Monomer,PF03024,False,Folate receptor beta
+6g6y,A,3zcw,A,4A2,drug-like,22,1.8,1.691,Monomer,PF00225,False,Kinesin-like protein KIF11
+2i3r,A,2i4g,A,UA1,drug-like,17,1.85,1.65,Monomer,PF00102,False,Receptor-type tyrosine-protein phosphatase beta
+5tvi,V,7w9a,A,DAO,drug-like,16,1.87,2.12,Monomer,,False,non specific lipid transfer protein
+1pu5,C,2ag2,B,CH5,drug-like,11,1.9,2.0,Monomer,PF02221,False,Ganglioside GM2 activator
+4ikv,A,4ikz,A,AFS,drug-like,10,1.9,2.4,Monomer,PF00854,False,Di-tripeptide ABC transporter (Permease)
+8aqi,B,7snw,B,9YR,drug-like,13,1.99,1.8,Monomer,,False,NanoLuc luciferase
+2d05,A,5hwa,A,GCS,drug-like,15,2.0,1.35,Monomer,,False,Chitosanase
+2rfj,B,7bjy,A,79C,drug-like,12,2.05,2.22,Monomer,PF00439,False,Bromodomain testis-specific protein
+1kxr,A,2g8j,A,D7G,drug-like,19,2.07,1.61,Monomer,PF00648,False,thiol protease DOMAINS I AND II
+1xgd,A,2pdf,A,ZST,drug-like,19,2.1,1.56,Monomer,PF00248,False,Aldose reductase
+1zm0,A,2i5c,B,IP5,drug-like,10,2.1,1.75,Monomer,PF00169,False,Pleckstrin
+3idh,A,4no7,A,2N8,drug-like,22,2.14,1.7,Monomer,PF00349;PF03727,False,Glucokinase
+2phz,A,2xuz,A,EB4,drug-like,17,2.15,1.9,Monomer,PF01497,False,Iron-uptake system-binding protein
+3n4u,A,6cd7,B,EDS,drug-like,10,2.2,1.53,Monomer,,False,APH(2'')-Id
+4fkm,B,4fil,A,0UE,drug-like,16,2.2,2.4,Monomer,,False,Similar to ferric hydroxamate receptor 1
+7x0f,A,7x0e,A,7Z8,drug-like,13,2.2,2.1,Monomer,PF00550,False,AMB antimetabolite synthase AmbB
+1xqv,A,1xro,A,LEU,drug-like,13,2.3,1.8,Monomer,PF00561,False,Proline iminopeptidase
+1x2g,C,4tvy,B,37R,drug-like,15,2.4,2.151,Monomer,PF10437;PF21948,False,Lipoate-protein ligase A
+3nx1,B,3nx2,A,FER,drug-like,10,2.4,2.01,Monomer,,False,Ferulic acid decarboxylase
+1k47,D,3gon,A,PMV,drug-like,14,2.42,1.9,Monomer,PF00288;PF08544,False,phosphomevalonate kinase
+2pkf,A,2pkk,A,2FA,drug-like,18,1.5,1.93,Homo 2-mer,PF00294,False,Adenosine kinase
+5b0e,B,5b09,A,4MX,drug-like,13,1.603,1.7,Homo 2-mer,,False,Olivetolic acid cyclase
+3t8b,A,3t8a,B,S0N,drug-like,15,1.649,2.245,Homo 6-mer,PF00378,False,"1,4-Dihydroxy-2-naphthoyl-CoA synthase"
+1evy,A,1n1e,B,NDE,drug-like,32,1.75,1.9,Homo 2-mer,,False,GLYCEROL-3-PHOSPHATE DEHYDROGENASE
+4zoe,B,4zoa,A,IFM,drug-like,15,1.8,2.17,Homo 2-mer,,False,Lin1840 protein
+6w10,A,8hch,A,URI,drug-like,12,1.80003386368,2.0,Homo 2-mer,,False,Three-prime repair exonuclease 1
