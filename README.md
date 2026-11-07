@@ -92,66 +92,107 @@ Every arm, including the two crystal structures, was re-scored through the same 
 
 ## Next steps: conformation-aware cryptic-pocket prediction
 
-Cryptic pockets are defined by motion, yet fast predictors, AE-PocketMiner included, score one static structure at a time. Recent work describes these methods as fast but qualitative, and they can miss subtle or dynamic openings. The follow-up is two projects in sequence. **Project 1** (diagnosis) tests whether the KRAS findings hold across many cryptic pockets and measures how unstable static predictions are as a pocket opens. **Project 2** (treatment) builds a predictor that reads a cheap MD-free conformational ensemble, like the Phase 2 ladder, instead of a single snapshot.
+Cryptic pockets are defined by motion, yet fast predictors, AE-PocketMiner included, score one static structure at a time. The follow-up is two projects in sequence:
 
-Project 1 stands on its own as a result even if Project 2 underperforms. It also produces what Project 2 needs: the target panel (chosen so it splits cleanly into family-disjoint training and test sets), a structure-prep pipeline, a conformational ensemble for every target, a unified scoring layer, and the static baseline outputs to beat.
+- **Project 1, the benchmark (diagnosis):** tests whether the KRAS findings hold across many cryptic pockets, under a scoring protocol that works for any tool's output, and measures how unstable static predictions are as a pocket opens.
+- **Project 2, the method (treatment):** builds a predictor that reads a cheap conformational ensemble generated without MD, like the Phase 2 ladder, instead of a single snapshot.
 
-### Project 1: multi-target evaluation
+Project 1 stands on its own even if Project 2 underperforms. It also supplies everything Project 2 needs: the data, the scoring harness, the ensembles and the baselines to beat.
 
-The main limitation above is that this is one target. Project 1 asks whether "the cryptic-pocket specialist doesn't beat the general tools" holds across many cryptic pockets or is specific to KRAS, and whether static tools are unstable or miss openings across conformational states.
+**Gaps targeted.** Primary:
 
-- **More targets:** about 15–25 apo/holo cryptic-pocket pairs drawn from CryptoBench, the PocketMiner set and CryptoSite, with KRAS G12D as the anchor. Each pair needs a known bound ligand, resolution better than about 2.5 Å, and matching construct and oligomeric state between apo and holo.
-- **An ensemble for every target:** the normal-mode ladder from Phase 2 is generated for each apo structure, optionally with subsampled AlphaFold conformers. The same ensembles are Project 2's input.
-- **One scoring layer for every tool:** adapters convert each tool's native output (fpocket pockets, P2Rank residue lists, per-residue probabilities) into the same predicted-residue set. Detection and localization (precision, recall, MCC, distance to the ligand centre) are scored separately, because this study showed that detection alone gives the wrong ranking. Probability tools are scored across a threshold sweep and with a threshold-independent measure.
-- **Conformational robustness:** every static tool is scored across each target's ensemble, measuring how much its prediction shifts as the pocket opens.
-- **Statistics across targets:** paired tests, effect sizes and confidence intervals, plus a check of whether each tool's failure mode (fragmentation, over-spreading, offset, missed openings) recurs on other targets.
-- **Sanity gate first:** the new pipeline must reproduce this repo's KRAS results before it is run on the full panel.
+- static methods miss dynamics and handle apo conformations poorly
+- subtle, small-magnitude openings are missed
+- evaluation is inconsistent and prone to leakage
 
-How it differs from existing benchmarks such as CryptoBench, which measures detection accuracy on mixed targets: it ties detection to localization quality, audits how heterogeneous tool outputs are compared, and measures behaviour across conformational states.
+Secondary, diagnosed by the benchmark:
 
-**Build plan**
+- over-prediction (low specificity)
+- qualitative rather than quantitative output
+- cryptic-pocket specialists don't reliably beat general tools
 
-1. Assemble the target panel and a manifest, starting with about 5 targets including KRAS.
-2. Prepare every structure the same way (chain selection, protonation at pH 7.4, waters stripped), reusing the KRAS prep.
-3. Run fpocket, P2Rank and AE-PocketMiner on each structure, keeping their raw outputs untouched for auditing.
-4. Generate the MD-free ensemble for each target.
-5. Write and unit-test the output adapters against the KRAS outputs.
-6. Build the unified scoring layer and pass the KRAS sanity gate.
-7. Scale to the full panel of about 15–25 targets.
-8. Score every tool across each ensemble to measure conformational robustness.
-9. Run statistics across targets and tag each tool's failure modes.
-10. Make the figures and a reproducibility bundle (code, configs, manifest).
+**Data at two scales.**
 
-### Project 2: a conformation-aware predictor
-
-Project 2 builds a predictor that combines pocket signals across a target's ensemble to find cryptic pockets that static tools miss, especially subtle openings, without running full MD.
-
-- **Input:** the target's MD-free ensemble (normal-mode ladder, optionally with subsampled AlphaFold conformers), not a single structure.
-- **Per-conformer features:** for each conformer, each residue gets the base tools' scores (AE-PocketMiner probabilities, P2Rank, fpocket) plus local geometry, burial and conservation where available.
-- **Aggregation model (the core contribution):** a learned function that turns per-conformer residue signals into one prediction of where a pocket forms across the accessible conformations. Candidates, simplest first:
-  1. learned pooling over conformers (attention, max, or mean plus variance);
-  2. a small sequence model over the ordered ladder, with openness as the axis, to capture how the signal changes as the pocket opens;
-  3. a light GNN on each conformer followed by aggregation across conformers.
-- **Training signal:** residues within 4.5 Å of the holo ligand on the Project 1 panel. The model sees the apo-derived ensemble and predicts the known cryptic site.
-- **Splits:** strict target-level train/validation/test splits with no protein family shared across splits.
-- **Success:** beating the static baselines, especially AE-PocketMiner, on MCC, precision and recall on held-out targets, and above all on the subset with subtle openings. Partial gains are reported as they are.
-- **Ablations:** static-only versus ensemble input (does dynamics help?), ensemble size, aggregation choice and which base features matter. Compute cost is reported, since being far cheaper than full-MD methods such as FAST is part of the point.
-
-### Timeline
-
-| When | Project 1 | Project 2 |
+| Set | Size | Used for |
 |---|---|---|
-| Nov 2026 | Panel, evaluation-protocol spec and ensemble plan | |
-| Dec 2026 | Pipeline, ensemble generation and adapters; KRAS sanity gate | |
-| Jan 2027 | Run the full panel (static scores, ensembles, robustness) | |
-| Feb 2027 | Statistics and failure-mode diagnosis | Start building the aggregation model |
-| Mar 2027 | Writing | Train and evaluate against static baselines on held-out targets |
-| Apr 2027 | Submit | Ablations and iteration |
-| May 2027 | | Writing and submission |
+| Full CryptoBench | 1,107 apo structures, 5,493 apo–holo pairs; official sequence-clustered splits (885 training in 4 folds, 222 test) | Large-scale benchmark and Project 2 training |
+| Curated subset | 35 CryptoBench test targets + KRAS G12D as anchor | Expensive per-target work: ensembles and conformational robustness |
 
-If this runs long, Project 2 moves to the NeurIPS 2027 workshop cycle.
+The curated subset is drawn from the test split only, so Project 2 is never evaluated on a protein it trained on.
 
-**Target venues (2027):** ICML and NeurIPS evaluation or molecular-ML workshops for both projects; a bioinformatics venue such as IEEE BIBM for a stronger version of Project 2 later.
+**Baselines:** fpocket, P2Rank, AE-PocketMiner, pLM-NN (the CryptoBench baseline), and a newer tool such as Seq2Pocket or UniPocket if it can be run.
+
+Work moves phase by phase: each phase starts only when the previous one's exit criteria are met, and the sanity gates are never skipped.
+
+### Phase 0: Setup and scoping (done)
+
+- [x] CryptoBench downloaded and its official splits reproduced exactly: every apo structure is in one split, and all are covered (`src/p1_s0_data.py` → `data/cryptobench/pairs.csv`)
+- [x] Curated subset chosen and justified: the RCSB metadata filters in `src/p1_s0_curate.py` → [`data/curated_subset/manifest.csv`](data/curated_subset/manifest.csv)
+- [x] Evaluation protocol written: [`docs/evaluation_protocol.md`](docs/evaluation_protocol.md)
+
+**Curated subset criteria:**
+
+- X-ray structures at ≤ 2.5 Å
+- same oligomeric state in apo and holo, and the same UniProt entry
+- pocket of at least 8 residues; no buffer additives or ions as the ligand
+- at most one target per Pfam family, with drug-like ligands preferred
+
+**What the protocol fixes:**
+
+- residue-level ground truth, plus a site gate of 14 Å from the true pocket centre
+- one adapter per tool, converting its output to a common set of predicted residues
+- detection metrics (top-1/top-3 success within 4 Å of the ligand) kept separate from localization metrics (precision, recall, MCC, distance to the ligand)
+- a threshold-independent AUPRC for tools that output probabilities
+- failure-mode tags
+- paired statistics across targets
+- all tuning on the training folds only
+
+### Phase 1: Benchmark pipeline (diagnosis)
+
+1. Prepare every structure the same way: chain selection, protonation at pH 7.4, cleanup.
+2. Run every baseline on every structure, keeping raw outputs and logging failures (for example, PocketMiner on multi-chain inputs).
+3. Write one adapter per tool to the common residue set. Probability tools are scored with a threshold sweep.
+4. Score detection, localization and AUPRC per target.
+5. **Sanity gate 1:** reproduce this repo's KRAS numbers (Table I, `results/anchors_all.csv`), then re-score KRAS under the unified protocol and explain every change.
+6. Scale to the full CryptoBench test set and the curated subset.
+7. Generate normal-mode ensembles (optionally with subsampled AlphaFold conformers) for the curated subset, reusing the KRAS ladder code.
+8. Score every baseline across each ensemble: detection rate, how much MCC varies across conformers, and how MCC tracks openness.
+9. Aggregate across targets (bootstrap confidence intervals, paired Wilcoxon tests with Holm correction, effect sizes) and tag failure modes: miss, fragmentation, over-spread, offset.
+10. Figures.
+
+**Exit criteria:** sanity gate 1 passed; a master table of tools × targets × metrics; the conformational-robustness result on the curated subset; statistics done. At that point Project 1 is a standalone, publishable result.
+
+### Phase 2: Conformation-aware method (treatment)
+
+**Feasibility checkpoint first.** Generating ensembles doesn't cheaply scale to about 1,100 proteins. Using the per-protein ensemble cost measured in Phase 1, either:
+
+- generate fewer, lighter conformers per protein so the full training set can be covered, or
+- train on a large static-feature set and keep full ensembles for the curated subset.
+
+**Steps:**
+
+1. **Per-conformer features:** for each residue in each conformer, the base tools' scores, local geometry, burial and conservation where available.
+2. **Dataset:** built on the CryptoBench folds, with family-disjoint training, validation and test sets.
+3. **Aggregation model**, simplest first:
+   1. learned pooling over conformers (attention, or mean plus variance)
+   2. a sequence model over the ladder ordered by openness
+   3. a light per-conformer GNN followed by aggregation across conformers
+4. **Training** with checkpoints and early stopping on the validation set.
+5. **Evaluation** on held-out targets with the Phase 1 harness, against all baselines. Subtle openings are reported separately.
+6. **Ablations:** static-only versus ensemble input (does dynamics help?), ensemble size, aggregation type and feature importance.
+7. **Sanity gate 2:** no family leakage between training and test.
+
+**Exit criteria:** ensemble scaling decided; leakage-free splits confirmed; the method evaluated against all baselines, including on subtle openings; ablations that isolate the contribution of dynamics; an honest account of where it helps and where it doesn't.
+
+### Phase 3: Writing and submission
+
+- one paper per project, with Project 2 explicitly motivated by Project 1's diagnosis
+- a public reproducibility bundle (code, configs, data manifest)
+- mentor review before submission
+
+**Target venues:** ICML or NeurIPS molecular-ML and evaluation workshops; a bioinformatics venue such as IEEE BIBM for the benchmark. Exact deadlines will be confirmed at submission time.
+
+**If Phase 2 runs long,** Project 1 is submitted on its own to the next suitable workshop cycle. Its harness and ensembles carry over to Project 2.
 
 ## Repo layout
 
@@ -162,10 +203,15 @@ src/
   phase2_ladder/        build_ladder_dense.py, anchor_volumes.py, validation.py
   phase3_benchmark/     phase3_fpocket.py, phase3_p2rank.py, phase3_pocketminer.py, score_anchors.py
   phase4_figures/       make_figures.py
+  p1_s0_data.py         extension: download CryptoBench, reproduce splits -> data/cryptobench/pairs.csv
+  p1_s0_curate.py       extension: filter candidates, draft the curated subset
 data/                   structures, ligand, docking files, ladder volumes, 7RPZ answer key
+  cryptobench/          pairs.csv (raw/ downloads are gitignored)
+  curated_subset/       manifest.csv (final panel), candidates.csv, shortlist_draft.csv
+tests/                  test_s0.py (Phase 0 self-checks)
 results/                per-tool CSVs, anchor table (Table I), cluster table (Table II)
 figures/                paper Figs. 1–5
-docs/paper.pdf          the manuscript
+docs/                   paper.pdf (the manuscript), evaluation_protocol.md (extension)
 envs/                   conda environments
 exploration/            superseded and one-off scripts, kept for transparency
 ```
@@ -193,6 +239,16 @@ python src/phase4_figures/make_figures.py           # Figs. 1–5 + Table II
 ```
 
 `answer_key.py` regenerates the answer key, but it overwrites the notes at the end of the saved file, so it doesn't need to be re-run.
+
+**Extension, Phase 0** (same env):
+
+```bash
+python src/p1_s0_data.py            # CryptoBench JSONs (~16 MB) + split check; add --cif for the 1.1 GB structures
+python src/p1_s0_curate.py          # RCSB metadata -> candidates.csv, shortlist_draft.csv
+python tests/test_s0.py
+```
+
+If downloads fail with a name-resolution error for `*.objectstorage.*.oraclecloud.com`, your DNS is blocking OSF's storage; switch to a public resolver (e.g. 1.1.1.1) for the download.
 
 ## Stack
 
