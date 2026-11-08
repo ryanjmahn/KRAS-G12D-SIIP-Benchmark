@@ -5,7 +5,17 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from p1_s6_aggregate import RULES, tag_table
+import numpy as np
+
+from p1_s6_aggregate import RULES, holm, rank_biserial, tag_table, wilson
+
+
+def test_stats_helpers():
+    assert rank_biserial([1, 2, 3]) == 1.0 and rank_biserial([-1, -2]) == -1.0
+    assert abs(rank_biserial([1, -2]) - (1 - 2) / 3) < 1e-12          # ranks 1 and 2
+    assert np.allclose(holm([0.01, 0.04, 0.03]), [0.03, 0.06, 0.06])  # step-down, monotone
+    lo, hi = wilson(5, 10)
+    assert abs(lo - 0.2366) < 1e-3 and abs(hi - 0.7634) < 1e-3       # textbook Wilson 95% interval
 
 
 def row(tid, tool, variant, primary, **m):
@@ -32,4 +42,5 @@ def test_tags():
 
 if __name__ == "__main__":
     test_tags()
+    test_stats_helpers()
     print("ok")
