@@ -95,7 +95,7 @@ Every arm, including the two crystal structures, was re-scored through the same 
 Cryptic pockets are defined by motion, yet fast predictors, AE-PocketMiner included, score one static structure at a time. The follow-up is two projects in sequence:
 
 - **Project 1, the benchmark (diagnosis):** tests whether the KRAS findings hold across many cryptic pockets, under a scoring protocol that works for any tool's output, and measures how unstable static predictions are as a pocket opens.
-- **Project 2, reliability (treatment):** originally a predictor reading a cheap MD-free ensemble. Project 1's own controls showed those ensembles carry no opening signal, so Project 2 now asks when a cryptic-pocket prediction can be trusted at all. See [Phase 2](#phase-2-when-should-you-believe-a-cryptic-pocket-prediction-revised).
+- **Project 2, reliability (treatment):** asks when a cryptic-pocket prediction can be trusted, using small backbone perturbations to see which predictions survive and which do not.
 
 Project 1 stands on its own even if Project 2 underperforms. It also supplies everything Project 2 needs: the data, the scoring harness, the ensembles and the baselines to beat.
 
@@ -171,32 +171,27 @@ Four tools (fpocket, P2Rank, AE-PocketMiner, pLM-NN) on 218 CryptoBench test tar
 
 **Exit criteria (met):** sanity gate 1 passed; a master table of tools × targets × metrics; the conformational-robustness result on the curated subset; statistics done. At that point Project 1 is a standalone, publishable result.
 
-### Phase 2: When should you believe a cryptic-pocket prediction? (revised)
+### Phase 2: When should you believe a cryptic-pocket prediction?
 
-**The original plan was a conformation-aware predictor. Two pilots and a literature check retired that plan; this section records why, because the negative results are part of the contribution.**
+Phase 1 measured two things that matter to a user more than average accuracy. These tools are **unstable**: fpocket's site detection changes on 44% of targets under no more than 1.4 Å of backbone motion, P2Rank's on 28%. And they are **poorly calibrated**: at their default thresholds the probability tools mark far more residues than any pocket holds, on 48–61% of targets. Project 2 asks what a practitioner can do about that. Given one apo structure and no holo, can you tell which predictions to trust?
 
-*Why the original plan was dropped:*
+The probe is perturbation. Move the backbone slightly, re-run the tool, and see what survives: a prediction that holds up under motion the protein could plausibly make is a different thing from one that appears in a single snapshot. Three generators give the motion — the lowest normal mode, a thermal mix of the ten lowest modes, and a random smooth deformation as the control — at matched amplitudes, so any signal has to beat random perturbation rather than merely beat the apo. The ensembles are a measuring instrument here, not an accuracy device: averaging a tool's scores over them moves AUPRC by only +0.01–0.02, and the random ensemble moves it just as much.
 
-- **Ensembles carry no opening signal.** The lowest-mode ladder reaches the holo pocket on only 6 of 36 targets, and gives *less* best-conformer gain than a random-motion control of the same size (`src/p1_s5_robustness.py`, p 0.0003–0.03).
-- **Ensemble averaging is smoothing, not dynamics.** On 100 training targets, averaging a tool's per-residue scores over 10 conformers raises AUPRC by +0.01–0.02 (P2Rank 0.319 → 0.332, fpocket 0.157 → 0.181), and a random-motion ensemble does the same (NMA vs random p 0.68–0.96) (`src/p2_s0_pilot.py`).
-- **The remaining ground is taken.** Crypsis (elastic-network ensembles + pocket grid + ESM-2, CryptoBench AUPRC 0.396) already ships the slow-modes-versus-random-perturbation control; Seq2Pocket (fine-tuned ESM-2 3B, AUPRC 0.475) leads on accuracy; Moore (bioRxiv 2026) reports the coverage-versus-ranking split on CryptoBench.
+*Pilot (`src/p2_s1_reliability.py`, 100 training targets; scaled to all 846 by `src/p2_s2_scale.py`):*
 
-*The revised question.* Phase 1 showed these tools are unstable (fpocket's site detection flips on 44% of targets under ≤ 1.4 Å of backbone motion, P2Rank's on 28%) and poorly calibrated (over-spread on 48–61% of targets at default thresholds). So: **can a practitioner tell, without the holo structure, which predictions to trust?**
+- **Target level, nothing predicts quality.** No stability signal separates well-predicted from badly-predicted targets (AUC 0.37–0.66, mostly near 0.5) — **and neither does the tool's own confidence** (AUC 0.51–0.55). A tool's score does not tell you whether its answer for this protein is worth anything.
+- **Residue level, a small consistent gain.** Among a tool's top-10 residues, how often a residue survives perturbation ranks true pocket residues above false ones better than the tool's own score, in 9 of 9 tool × generator combinations (+0.004 to +0.095 AUC; significant for AE-PocketMiner, and for P2Rank when rank-summed with the tool's own score).
+- **Random perturbation works as well as the normal modes**, which makes the signal cheap to compute and rules out a dynamics explanation for it.
 
-*Pilot C (`src/p2_s1_reliability.py`, 100 training targets).* Three perturbation-stability signals (rank correlation apo-vs-conformer, top-10 overlap, per-residue spread), against the confidence a practitioner already has (the tool's own score):
+*Steps:*
 
-- **Target level: nothing works.** No signal separates well-predicted from badly-predicted targets (AUC 0.37–0.66, mostly ≈ 0.5) — **and neither does the tool's own confidence** (AUC 0.51–0.55). A tool's score does not tell you whether its answer for this protein is any good.
-- **Residue level: a small, consistent gain.** Among a tool's top-10 residues, how often a residue survives perturbation ranks true pocket residues above false ones better than the tool's own score, in 9 of 9 tool × generator combinations (+0.004 to +0.095 AUC; significant for AE-PocketMiner and, combined with the own score, for P2Rank).
-- **Random perturbation works as well as normal modes** here too, which makes the signal cheap but removes any dynamics claim.
+- [x] Perturbation-stability signals measured against the tools' own confidence (pilot, 100 targets).
+- [ ] Scale to all 846 usable training targets and re-test with correction for multiple comparisons (`src/p2_s2_scale.py`).
+- [ ] Calibration curves and risk–coverage curves per tool: what precision is reachable if the least stable predictions are withheld?
+- [ ] Sanity gate 2 (`tests/test_no_leakage.py`): family-disjoint splits, if anything is fitted.
+- [ ] Add Crypsis and Seq2Pocket to the baseline table; cite Moore (bioRxiv 2026) as concurrent work on the any-rank versus top-3 result.
 
-*Planned steps:*
-
-- [ ] Scale pilot C beyond 100 targets and confirm the residue-level gain holds (or does not) with proper correction.
-- [ ] Calibration curves and risk–coverage (selective-prediction) curves per tool: what precision is reachable if the least-stable predictions are withheld?
-- [ ] `tests/test_no_leakage.py` (sanity gate 2) if any model is fitted; family-disjoint splits from the CryptoBench folds.
-- [ ] Add Crypsis and Seq2Pocket to the baseline table, and cite Moore as concurrent work for the any-rank versus top-3 result.
-
-**Exit criteria:** an honest answer to the reliability question — either a usable confidence rule with its risk–coverage curve, or the documented finding that no cheap signal (the tools' own scores included) predicts when a cryptic-pocket prediction is trustworthy.
+**Exit criteria:** a usable confidence rule with its risk–coverage curve, or the documented finding that no cheap signal — the tools' own scores included — predicts when a cryptic-pocket prediction is trustworthy.
 
 ### Phase 3: Writing and submission
 
@@ -227,8 +222,9 @@ src/
   p1_s5_robustness.py   robustness across conformers
   p1_s6_aggregate.py    failure tags and cross-target statistics
   p1_s7_figures.py      figures/p1/
-  p2_s0_pilot.py        P2 feasibility pilot: do ensembles add accuracy? (no)
-  p2_s1_reliability.py  P2 pilot: is perturbation stability a confidence signal?
+  p2_s0_pilot.py        perturbation ensembles (normal modes, mode mix, random control) + tool scores
+  p2_s1_reliability.py  is perturbation stability a confidence signal?
+  p2_s2_scale.py        the same over every training target, chunked (conformers cached, then deleted)
 data/                   structures, ligand, docking files, ladder volumes, 7RPZ answer key
   cryptobench/          pairs.csv (raw/ downloads are gitignored)
   curated_subset/       manifest.csv (final panel), candidates.csv, shortlist_draft.csv
@@ -295,8 +291,11 @@ python src/p1_s7_figures.py
 python src/p2_s0_pilot.py build
 for g in nma1 nmaK random; do python src/p1_s2_run_baselines.py --root runs/p2_pilot/$g --log-suffix _p2pilot_$g; done
 python src/p2_s0_pilot.py score
+python src/p2_s2_scale.py cache && python src/p2_s2_scale.py run
 python src/p2_s1_reliability.py
 ```
+
+`p2_s2_scale.py` keeps only one chunk of conformers on disk at a time (about 2 GB) and reduces each target to per-residue score arrays in `runs/p2_cache/` (about 60 MB for the whole training set), so the sweep never needs the ~38 GB the full set of conformers would occupy.
 
 If downloads fail with a name-resolution error for `*.objectstorage.*.oraclecloud.com`, your DNS is blocking OSF's storage; switch to a public resolver (e.g. 1.1.1.1) for the download.
 
