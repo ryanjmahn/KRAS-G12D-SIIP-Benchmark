@@ -6,7 +6,18 @@ This protocol fixes how every tool is scored on every target, before any multi-t
 
 - **Targets.** The CryptoBench test split (222 apo structures), plus the curated subset in `data/curated_subset/manifest.csv` (35 CryptoBench test targets and the KRAS G12D anchor).
 - **Evaluated structure.** The **apo** structure, which is the realistic use case, since the pocket is not yet visible. The holo structure is used only to define the answer key, as 7RPZ was for KRAS.
-- **Chains.** The apo chain(s) named in the pair. Every tool sees the same prepared file (Phase 1 `p1_s1_prep.py`).
+- **Chains.** The apo chain(s) named in the pair. Every tool sees the same prepared file (`src/p1_s1_prep.py`).
+- **Preparation.** Every target is prepared the same way:
+  - Start from the current RCSB mmCIF and keep the first model and the pocket chain(s).
+  - Keep protein only: waters, ligands, ions and cofactors are removed. KRAS's GDP is removed too, and its 5US4 scores are unchanged.
+  - Keep one conformer per atom.
+  - Convert selenomethionine (MSE) to MET. Drop other non-standard residues and any residue missing backbone N, Cα or C.
+  - Run PDB2PQR 3.6.1 (AMBER, PROPKA, pH 7.4), as for KRAS.
+- **Ligand transfer.**
+  - **Superposition:** holo Cα are paired with apo Cα by global sequence alignment, so numbering can differ. The fit is a Kabsch superposition on paired Cα within 12 Å of the ligand, refitted on the stable core (pairs deviating ≤ 3 Å) so residues that move with the opening don't distort it.
+  - **QC:** a target is excluded from scoring when fewer than half its present true residues have an atom within 6 Å of the transferred ligand.
+  - **Renamed ligands:** when the PDB has since renamed a ligand code, it is found by index and chain instead.
+  - **Logs:** status per target in `results/p1_prep_log.csv`.
 
 ## 2. Ground truth
 
@@ -33,7 +44,7 @@ The gate uses the ligand position, so the localization metrics measure "how well
 
 ## 4. Converting tool outputs to residues
 
-Each tool's raw output is kept untouched in `results/raw/`. An adapter (`src/p1_adapters/`) turns it into two things: a **predicted residue set** and a **per-residue score**.
+Each tool's raw output is kept untouched in `runs/p1/` (`src/p1_s2_run_baselines.py`; versions in `results/p1_tools.json`). An adapter (`src/p1_adapters.py`) turns it into two things: a **predicted residue set** and a **per-residue score**.
 
 | Output type | Tools | Predicted residue set | Per-residue score |
 |---|---|---|---|
@@ -77,7 +88,7 @@ All metrics are computed per target, then aggregated (§7). Residues are never p
 
 **Empty predictions:**
 - A tool that predicts nothing at the site gets recall 0 and MCC 0, and is counted as a detection miss.
-- A tool that crashes or cannot run on a target (for example, PocketMiner on some multi-chain inputs) is logged in `results/raw/failures.csv`. It is scored as a miss in the primary analysis, and the results are also reported on the set of targets every tool completed.
+- A tool that crashes or cannot run on a target (for example, PocketMiner on some multi-chain inputs) is logged in `results/p1_run_log.csv` (prep failures in `results/p1_prep_log.csv`). It is scored as a miss in the primary analysis, and the results are also reported on the set of targets every tool completed.
 
 ## 6. Failure-mode tags
 
