@@ -167,10 +167,12 @@ def main():
     from paths import RESULTS, RUNS
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", nargs="*", default=["test", "anchor"], help="meta.json splits to score")
+    ap.add_argument("--root", default=str(RUNS / "p1"), help="folder of prepared targets (runs/p1_ens for ensembles)")
+    ap.add_argument("--suffix", default=None, help="output suffix (default: _train for training splits)")
     args = ap.parse_args()
-    p1 = RUNS / "p1"
+    p1 = Path(args.root)
     train = any(s.startswith("train") for s in args.split)
-    sfx = "_train" if train else ""
+    sfx = args.suffix if args.suffix is not None else ("_train" if train else "")
     tfile = RESULTS / "p1_thresholds.json"
     tstar = {} if train or not tfile.exists() else json.loads(tfile.read_text())
     rows, sweeps, excluded = [], [], []

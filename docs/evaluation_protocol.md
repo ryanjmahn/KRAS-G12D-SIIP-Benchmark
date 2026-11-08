@@ -155,13 +155,36 @@ The training-fold shares are within a few points of these. On KRAS (5US4): fpock
 
 ## 8. Conformational robustness (curated subset only)
 
-- **Ensemble:** normal-mode ladder from the apo structure, using the Phase 2 KRAS method (ProDy, lowest-frequency mode, graded displacement). Optionally, subsampled AlphaFold conformers. The holo structure is never an input (the 7RPZ quarantine rule).
-- **Openness:** fpocket volume of the pocket nearest the site centre, as for KRAS. Because fpocket is also a benchmarked tool, openness is also reported as the Cα RMSD of the true pocket residues to the holo structure, which is independent of every tool.
-- **Per tool per target:**
-  - detection rate across conformers
-  - mean and SD of MCC across conformers (instability)
-  - Spearman correlation of MCC with openness (does the tool only work once the pocket is open?)
-- **Subtle openings (G4):** targets whose apo-to-holo pocket Cα RMSD is in the lowest third of the subset are analysed separately.
+### Ensembles (`src/p1_s4_ensembles.py`)
+
+The ensembles use the KRAS Phase 2 method: ProDy ANM on the prepared apo's Cα, lowest non-trivial mode, each residue moved rigidly with its Cα, up to 1.42 Å global Cα RMSD. The holo structure is never an input (the 7RPZ quarantine rule). Two changes from the KRAS ladder:
+- **Both directions:** 12 steps each side plus the apo, 25 conformers. KRAS used the one direction validated as opening, which a general target can't know without looking at the holo.
+- **Amplitude cap:** no residue moves more than 12 Å, the KRAS "torn" rule. Without the cap, the lowest mode's floppy termini tore 13 of 36 targets (up to 27.6 Å).
+
+Each target takes 0.7 s to build (2 s at most). The three structure tools take about 0.4 s per conformer.
+
+**Control ladder (`--null`).** Same amplitudes, directions and cap, but along a random smooth motion: random per-residue vectors smoothed over 8 Å and seeded per target. This is the noise baseline for "some conformer beats the apo". It moves the pocket more than the normal mode does (median 1.30 vs 0.80 Å at the ladder ends), so it is a strict baseline.
+
+### Openness axes
+
+- **Tool-independent:** Cα RMSD of the true pocket residues to the holo, after superposing on them (holo residues paired by sequence alignment).
+- **fpocket-dependent:** volume of the largest fpocket pocket within 8 Å of a ligand atom, as for KRAS.
+
+### Measures
+
+Per tool per target, over the 25 conformers (primary variant; pocket tools also top-3):
+- **Detection:** share of conformers detected, and flips of detection along the ladder.
+- **MCC:** on the apo, mean, SD and best conformer. **Headroom** = best minus apo.
+- **Openness trends:** Spearman correlation of MCC with closeness to holo (only where the ladder moves the pocket ≥ 0.25 Å toward holo) and with site volume.
+- **Subtle openings (G4):** the lowest third of apo-to-holo pocket RMSD (≤ 1.62 Å), analysed separately.
+
+### Results (36 curated targets; `results/p1_robustness*.csv`)
+
+- **Static predictions are fragile under small motion (G1).** Along the normal-mode ladder, detection flips on 44% of targets for fpocket, 28% for P2Rank and 8% for AE-PocketMiner. pLM-NN never changes because it reads only the sequence.
+- **The lowest normal mode rarely opens the pocket.** It moves the pocket ≥ 0.25 Å toward holo on only 6 of 36 targets.
+- **The two openness axes disagree.** Site volume and closeness to holo correlate at a median of −0.05 per target. On KRAS, the opening direction reproduces the volume jump (282 → 739 Å³), but the pocket backbone moves *away* from the holo (1.66 → 2.12 Å). A larger cavity is not a holo-like pocket.
+- **"Some conformer beats the apo" is noise, not signal.** The control ladder gives *more* headroom than the normal mode for every structure tool (paired Wilcoxon p = 0.0003–0.03; e.g. P2Rank 0.19 vs 0.11 MCC). On these ladders, best-of-25 gains come from selection luck and generic sensitivity, not from the normal mode.
+- **Consequence for Phase 2:** a lowest-mode NMA ensemble is unlikely to carry real opening signal. The method needs ensembles that actually move the pocket, such as several low modes, pocket-aware mode selection, or subsampled AlphaFold. It must also beat the control ladder, not only the apo.
 
 ## 9. Splits and leakage
 

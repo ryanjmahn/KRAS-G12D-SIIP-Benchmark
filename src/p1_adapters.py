@@ -35,18 +35,21 @@ def fpocket(out_dir):
         if line.startswith("HETATM") and " STP " in line:
             spheres.setdefault(int(line[22:26]), []).append(
                 [float(line[30:38]), float(line[38:46]), float(line[46:54])])
-    scores, cur = {}, None
+    scores, volumes, cur = {}, {}, None
     for line in open(out_dir / f"{name}_info.txt"):
         s = line.strip()
         if s.startswith("Pocket"):
             cur = int(s.split()[1])
         elif s.startswith("Score :") and cur is not None:
             scores[cur] = float(s.split()[-1])
+        elif s.startswith("Volume :") and cur is not None:
+            volumes[cur] = float(s.split()[-1])
     pockets = []
     for pn, sph in sorted(spheres.items()):
         lining = {f"{l[21]}_{int(l[22:26])}{l[26].strip()}"
                   for l in open(out_dir / "pockets" / f"pocket{pn}_atm.pdb") if l.startswith("ATOM")}
-        pockets.append(dict(rank=pn, center=np.mean(sph, axis=0), score=scores.get(pn, 0.0), residues=lining))
+        pockets.append(dict(rank=pn, center=np.mean(sph, axis=0), score=scores.get(pn, 0.0), residues=lining,
+                            volume=volumes.get(pn, np.nan)))
     return pockets
 
 

@@ -82,10 +82,15 @@ def versions():
 
 
 def main():
+    global P1, P2_OUT, PM_IN, PM_OUT
     ap = argparse.ArgumentParser()
     ap.add_argument("--tools", nargs="*", default=["fpocket", "p2rank", "pocketminer"])
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--root", default=str(P1), help="folder of prepared targets (runs/p1_ens for ensembles)")
+    ap.add_argument("--log-suffix", default="", help="e.g. _ensemble, so results/p1_run_log.csv is not overwritten")
     args = ap.parse_args()
+    P1 = Path(args.root).resolve()   # absolute: AE-PocketMiner runs from its own folder
+    P2_OUT, PM_IN, PM_OUT = P1 / "p2rank_out", P1 / "pocketminer_in", P1 / "pocketminer_out"
     tids = prepared()
     print(f"{len(tids)} prepared targets")
 
@@ -104,7 +109,7 @@ def main():
     log["fpocket"] = [(P1 / t / f"{t}_out" / f"{t}_info.txt").exists() for t in tids]
     log["p2rank"] = [(P2_OUT / f"{t}.pdb_predictions.csv").exists() for t in tids]
     log["pocketminer"] = [(PM_OUT / f"{t}-preds.npy").exists() for t in tids]
-    log.to_csv(RESULTS / "p1_run_log.csv", index=False)
+    log.to_csv(RESULTS / f"p1_run_log{args.log_suffix}.csv", index=False)
     (RESULTS / "p1_tools.json").write_text(json.dumps(versions(), indent=2))
     for tool in ("fpocket", "p2rank", "pocketminer"):
         missing = log.loc[~log[tool], "target_id"].tolist()
