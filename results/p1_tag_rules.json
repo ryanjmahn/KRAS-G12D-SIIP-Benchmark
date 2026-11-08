@@ -1,0 +1,9 @@
+{
+  "OFFSET_GATE": 8.0,
+  "FRAG_MIN_POCKETS": 2,
+  "FRAG_MAX_SHARE": 0.67,
+  "SPREAD_MIN": 2.0,
+  "SPREAD_MAX_PRECISION": 0.3,
+  "SUCCESS_MCC": 0.5,
+  "locked_on": "CryptoBench training folds 0-3"
+}

@@ -113,15 +113,37 @@ All metrics are computed per target, then aggregated (§7). Residues are never p
 
 ## 6. Failure-mode tags
 
-These tags are applied per tool per target, from the metrics above, and may overlap. Cut-offs are **[provisional]** and fixed on the training folds before test results are read.
+Tags are applied per tool per target, from the primary variant, and may overlap. Each target also gets one **primary label**: the first tag in the order below, otherwise *success* (MCC ≥ 0.5) or *partial*. The rules were **locked on the 846 training targets** (`results/p1_tag_rules.json`, `src/p1_s6_aggregate.py lock`) before the test split was tagged.
 
-| Tag | Rule |
+| Tag | Rule (locked) |
 |---|---|
-| Miss | Nothing at the site (no at-site pocket, or no true residue ≥ *t*) |
-| Fragmentation | ≥ 3 at-site pockets **and** best-single recall < 0.5 × union recall |
-| Over-spread | Precision < 0.3 **and** spread ratio > 2 |
-| Offset | At-site pocket present but DCA > 4 Å **and** recall < 0.5 |
-| Success | MCC ≥ 0.5 and none of the above |
+| Miss | Nothing near the site: no pocket centre within 8 Å of a ligand atom, or no true residue ≥ *t* |
+| Offset | Pocket tools: no pocket within 4 Å of the ligand, but one within 8 Å |
+| Fragmentation | Pocket tools: ≥ 2 at-site pockets **and** no single pocket recovers 2/3 of the union's recall |
+| Over-spread | Predicts > 2× as many residues as the true pocket **and** precision < 0.3 |
+| Success / partial | No tag, and MCC ≥ 0.5 / < 0.5 |
+
+**Changes from the provisional rules**, both made on training data:
+- **Fragmentation:** under the 4 Å gate, ≥ 3 at-site pockets is too rare to measure (fpocket 3.5%, P2Rank 0.7%), so the rule starts at 2.
+- **Offset:** now uses the gate sweep (nothing at 4 Å, something at 8 Å) instead of DCA, which the 4 Å gate already bounds.
+
+**Sensitivity on the training folds:**
+- **Fragmentation share 0.5–0.8:** fpocket fragments more than P2Rank at every setting.
+- **Over-spread multiple 1.5–3:** AE-PocketMiner 60–76% of targets, pocket tools ≤ 4%.
+- **Offset radius 6–10 Å:** fpocket is offset more often than P2Rank at every setting.
+
+The comparisons between tools hold across all of them.
+
+**Test split (219 targets), primary-label shares:**
+
+| Tool | Miss | Offset | Fragmentation | Over-spread | Partial | Success |
+|---|---|---|---|---|---|---|
+| fpocket | 0.08 | 0.22 | 0.09 | 0.02 | 0.13 | **0.47** |
+| P2Rank | 0.26 | 0.17 | 0.05 | 0.04 | 0.11 | 0.39 |
+| pLM-NN | 0.14 | – | – | 0.48 | 0.17 | 0.21 |
+| AE-PocketMiner | 0.16 | – | – | **0.61** | 0.19 | 0.03 |
+
+The training-fold shares are within a few points of these. On KRAS (5US4): fpocket success, P2Rank miss, AE-PocketMiner over-spread, pLM-NN partial.
 
 ## 7. Statistics across targets
 
