@@ -95,7 +95,7 @@ Every arm, including the two crystal structures, was re-scored through the same 
 Cryptic pockets are defined by motion, yet fast predictors, AE-PocketMiner included, score one static structure at a time. The follow-up is two projects in sequence:
 
 - **Project 1, the benchmark (diagnosis):** tests whether the KRAS findings hold across many cryptic pockets, under a scoring protocol that works for any tool's output, and measures how unstable static predictions are as a pocket opens.
-- **Project 2, the method (treatment):** builds a predictor that reads a cheap conformational ensemble generated without MD, like the Phase 2 ladder, instead of a single snapshot.
+- **Project 2, reliability (treatment):** originally a predictor reading a cheap MD-free ensemble. Project 1's own controls showed those ensembles carry no opening signal, so Project 2 now asks when a cryptic-pocket prediction can be trusted at all. See [Phase 2](#phase-2-when-should-you-believe-a-cryptic-pocket-prediction-revised).
 
 Project 1 stands on its own even if Project 2 underperforms. It also supplies everything Project 2 needs: the data, the scoring harness, the ensembles and the baselines to beat.
 
@@ -139,7 +139,7 @@ Work moves phase by phase: each phase starts only when the previous one's exit c
 
 **What the protocol fixes:**
 
-- residue-level ground truth, plus a site gate of 14 Å from the true pocket centre
+- residue-level ground truth, plus a site gate: a pocket counts only if its centre is within 4 Å of a ligand atom
 - one adapter per tool, converting its output to a common set of predicted residues
 - detection metrics (top-1/top-3 success within 4 Å of the ligand) kept separate from localization metrics (precision, recall, MCC, distance to the ligand)
 - a threshold-independent AUPRC for tools that output probabilities
@@ -147,7 +147,16 @@ Work moves phase by phase: each phase starts only when the previous one's exit c
 - paired statistics across targets
 - all tuning on the training folds only
 
-### Phase 1: Benchmark pipeline (diagnosis)
+### Phase 1: Benchmark pipeline (diagnosis) (done)
+
+Four tools (fpocket, P2Rank, AE-PocketMiner, pLM-NN) on 218 CryptoBench test targets, plus 25-conformer ensembles for the 36-target curated subset. Figures and captions: [`figures/p1/`](figures/p1/CAPTIONS.md).
+
+- **Sanity gate 1 passed:** Table I is reproduced from scratch, and KRAS re-scored under the unified protocol is in `results/kras_unified.csv`.
+- **The ranking depends on the scoring rule.** fpocket beats P2Rank on MCC when any pocket can count; P2Rank wins when only the top-3 pockets can. Both effects are significant after Holm correction.
+- **pLM-NN has the best AUPRC.** The MD-trained AE-PocketMiner is significantly worse than both P2Rank and pLM-NN, so the original KRAS claim holds.
+- **Each tool has a characteristic failure.** P2Rank misses, fpocket is offset, and the probability tools over-spread. The tag rules were locked on the training folds.
+- **Robustness:** detection flips along the ladder for 44% of targets with fpocket and 28% with P2Rank. The lowest normal mode gives *less* best-conformer gain than a random-motion control, and fpocket volume does not track how holo-like the pocket is.
+
 
 1. Prepare every structure the same way: chain selection, protonation at pH 7.4, cleanup.
 2. Run every baseline on every structure, keeping raw outputs and logging failures (for example, PocketMiner on multi-chain inputs).
@@ -160,29 +169,34 @@ Work moves phase by phase: each phase starts only when the previous one's exit c
 9. Aggregate across targets (bootstrap confidence intervals, paired Wilcoxon tests with Holm correction, effect sizes) and tag failure modes: miss, fragmentation, over-spread, offset.
 10. Figures.
 
-**Exit criteria:** sanity gate 1 passed; a master table of tools × targets × metrics; the conformational-robustness result on the curated subset; statistics done. At that point Project 1 is a standalone, publishable result.
+**Exit criteria (met):** sanity gate 1 passed; a master table of tools × targets × metrics; the conformational-robustness result on the curated subset; statistics done. At that point Project 1 is a standalone, publishable result.
 
-### Phase 2: Conformation-aware method (treatment)
+### Phase 2: When should you believe a cryptic-pocket prediction? (revised)
 
-**Feasibility checkpoint first.** Generating ensembles doesn't cheaply scale to about 1,100 proteins. Using the per-protein ensemble cost measured in Phase 1, either:
+**The original plan was a conformation-aware predictor. Two pilots and a literature check retired that plan; this section records why, because the negative results are part of the contribution.**
 
-- generate fewer, lighter conformers per protein so the full training set can be covered, or
-- train on a large static-feature set and keep full ensembles for the curated subset.
+*Why the original plan was dropped:*
 
-**Steps:**
+- **Ensembles carry no opening signal.** The lowest-mode ladder reaches the holo pocket on only 6 of 36 targets, and gives *less* best-conformer gain than a random-motion control of the same size (`src/p1_s5_robustness.py`, p 0.0003–0.03).
+- **Ensemble averaging is smoothing, not dynamics.** On 100 training targets, averaging a tool's per-residue scores over 10 conformers raises AUPRC by +0.01–0.02 (P2Rank 0.319 → 0.332, fpocket 0.157 → 0.181), and a random-motion ensemble does the same (NMA vs random p 0.68–0.96) (`src/p2_s0_pilot.py`).
+- **The remaining ground is taken.** Crypsis (elastic-network ensembles + pocket grid + ESM-2, CryptoBench AUPRC 0.396) already ships the slow-modes-versus-random-perturbation control; Seq2Pocket (fine-tuned ESM-2 3B, AUPRC 0.475) leads on accuracy; Moore (bioRxiv 2026) reports the coverage-versus-ranking split on CryptoBench.
 
-1. **Per-conformer features:** for each residue in each conformer, the base tools' scores, local geometry, burial and conservation where available.
-2. **Dataset:** built on the CryptoBench folds, with family-disjoint training, validation and test sets.
-3. **Aggregation model**, simplest first:
-   1. learned pooling over conformers (attention, or mean plus variance)
-   2. a sequence model over the ladder ordered by openness
-   3. a light per-conformer GNN followed by aggregation across conformers
-4. **Training** with checkpoints and early stopping on the validation set.
-5. **Evaluation** on held-out targets with the Phase 1 harness, against all baselines. Subtle openings are reported separately.
-6. **Ablations:** static-only versus ensemble input (does dynamics help?), ensemble size, aggregation type and feature importance.
-7. **Sanity gate 2:** no family leakage between training and test.
+*The revised question.* Phase 1 showed these tools are unstable (fpocket's site detection flips on 44% of targets under ≤ 1.4 Å of backbone motion, P2Rank's on 28%) and poorly calibrated (over-spread on 48–61% of targets at default thresholds). So: **can a practitioner tell, without the holo structure, which predictions to trust?**
 
-**Exit criteria:** ensemble scaling decided; leakage-free splits confirmed; the method evaluated against all baselines, including on subtle openings; ablations that isolate the contribution of dynamics; an honest account of where it helps and where it doesn't.
+*Pilot C (`src/p2_s1_reliability.py`, 100 training targets).* Three perturbation-stability signals (rank correlation apo-vs-conformer, top-10 overlap, per-residue spread), against the confidence a practitioner already has (the tool's own score):
+
+- **Target level: nothing works.** No signal separates well-predicted from badly-predicted targets (AUC 0.37–0.66, mostly ≈ 0.5) — **and neither does the tool's own confidence** (AUC 0.51–0.55). A tool's score does not tell you whether its answer for this protein is any good.
+- **Residue level: a small, consistent gain.** Among a tool's top-10 residues, how often a residue survives perturbation ranks true pocket residues above false ones better than the tool's own score, in 9 of 9 tool × generator combinations (+0.004 to +0.095 AUC; significant for AE-PocketMiner and, combined with the own score, for P2Rank).
+- **Random perturbation works as well as normal modes** here too, which makes the signal cheap but removes any dynamics claim.
+
+*Planned steps:*
+
+- [ ] Scale pilot C beyond 100 targets and confirm the residue-level gain holds (or does not) with proper correction.
+- [ ] Calibration curves and risk–coverage (selective-prediction) curves per tool: what precision is reachable if the least-stable predictions are withheld?
+- [ ] `tests/test_no_leakage.py` (sanity gate 2) if any model is fitted; family-disjoint splits from the CryptoBench folds.
+- [ ] Add Crypsis and Seq2Pocket to the baseline table, and cite Moore as concurrent work for the any-rank versus top-3 result.
+
+**Exit criteria:** an honest answer to the reliability question — either a usable confidence rule with its risk–coverage curve, or the documented finding that no cheap signal (the tools' own scores included) predicts when a cryptic-pocket prediction is trustworthy.
 
 ### Phase 3: Writing and submission
 
@@ -192,7 +206,7 @@ Work moves phase by phase: each phase starts only when the previous one's exit c
 
 **Target venues:** ICML or NeurIPS molecular-ML and evaluation workshops; a bioinformatics venue such as IEEE BIBM for the benchmark. Exact deadlines will be confirmed at submission time.
 
-**If Phase 2 runs long,** Project 1 is submitted on its own to the next suitable workshop cycle. Its harness and ensembles carry over to Project 2.
+**If Phase 2 runs long,** Project 1 is submitted on its own to the next suitable workshop cycle. Its harness, ensembles and the random-motion control carry over to Project 2.
 
 ## Repo layout
 
@@ -205,6 +219,16 @@ src/
   phase4_figures/       make_figures.py
   p1_s0_data.py         extension: download CryptoBench, reproduce splits -> data/cryptobench/pairs.csv
   p1_s0_curate.py       extension: filter candidates, draft the curated subset
+  p1_s1_prep.py         uniform prep, ligand transfer, labels -> runs/p1/<target>/
+  p1_s2_run_baselines.py, p1_s2b_plmnn.py   run fpocket / P2Rank / AE-PocketMiner, and pLM-NN
+  p1_adapters.py        tool output -> residue sets and per-residue scores
+  p1_s3_score.py        per-target metrics -> results/p1_master*.csv
+  p1_s4_ensembles.py    NMA ladders and the random-motion control
+  p1_s5_robustness.py   robustness across conformers
+  p1_s6_aggregate.py    failure tags and cross-target statistics
+  p1_s7_figures.py      figures/p1/
+  p2_s0_pilot.py        P2 feasibility pilot: do ensembles add accuracy? (no)
+  p2_s1_reliability.py  P2 pilot: is perturbation stability a confidence signal?
 data/                   structures, ligand, docking files, ladder volumes, 7RPZ answer key
   cryptobench/          pairs.csv (raw/ downloads are gitignored)
   curated_subset/       manifest.csv (final panel), candidates.csv, shortlist_draft.csv
@@ -246,6 +270,32 @@ python src/phase4_figures/make_figures.py           # Figs. 1–5 + Table II
 python src/p1_s0_data.py            # CryptoBench JSONs (~16 MB) + split check; add --structures for test-split mmCIFs from RCSB
 python src/p1_s0_curate.py          # RCSB metadata -> candidates.csv, shortlist_draft.csv
 python tests/test_s0.py
+```
+
+**Extension, Phase 1** (structprep env; pLM-NN uses `envs/plm.yml`):
+
+```bash
+python src/p1_s1_prep.py && python src/p1_s1_prep.py --split train-fold-0 train-fold-1 train-fold-2 train-fold-3
+python src/p1_s2_run_baselines.py
+python src/p1_s2b_plmnn.py embed && python src/p1_s2b_plmnn.py predict
+python src/p1_s3_score.py --split train-fold-0 train-fold-1 train-fold-2 train-fold-3 && python src/p1_s3_score.py
+python src/p1_s4_ensembles.py && python src/p1_s4_ensembles.py --null
+python src/p1_s2_run_baselines.py --root runs/p1_ens --log-suffix _ensemble
+python src/p1_s2_run_baselines.py --root runs/p1_ens_null --log-suffix _ensemble_null
+python src/p1_s3_score.py --split ensemble --root runs/p1_ens --suffix _ensemble
+python src/p1_s3_score.py --split ensemble --root runs/p1_ens_null --suffix _ensemble_null
+python src/p1_s5_robustness.py
+python src/p1_s6_aggregate.py lock && python src/p1_s6_aggregate.py tags && python src/p1_s6_aggregate.py stats
+python src/p1_s7_figures.py
+```
+
+**Extension, Phase 2 pilots** (structprep env):
+
+```bash
+python src/p2_s0_pilot.py build
+for g in nma1 nmaK random; do python src/p1_s2_run_baselines.py --root runs/p2_pilot/$g --log-suffix _p2pilot_$g; done
+python src/p2_s0_pilot.py score
+python src/p2_s1_reliability.py
 ```
 
 If downloads fail with a name-resolution error for `*.objectstorage.*.oraclecloud.com`, your DNS is blocking OSF's storage; switch to a public resolver (e.g. 1.1.1.1) for the download.
