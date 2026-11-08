@@ -1,6 +1,6 @@
 # Tools, installed locally (see SETUP.md)
-ae-pocketminer/
-p2rank_2.4.2/
+ae-pocketminer
+p2rank_2.4.2
 p2rank.tar.gz
 
 # Generated locally: ladder conformers, tool outputs

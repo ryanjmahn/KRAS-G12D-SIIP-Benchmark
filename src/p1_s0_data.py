@@ -11,7 +11,7 @@ Outputs:
 
 Usage (structprep env):
   python src/p1_s0_data.py          # JSONs only (~16 MB)
-  python src/p1_s0_data.py --cif    # also the 1.1 GB CIF archive (needed from Phase 1 on)
+  python src/p1_s0_data.py --structures   # also test-split + curated mmCIFs from RCSB (Phase 1)
 """
 import argparse
 import json
@@ -37,7 +37,9 @@ FILES = {
     "folds/train-fold-2.json": "nmj39",
     "folds/train-fold-3.json": "btdqy",
 }
-CIF_ZIP = ("auxiliary-data/cif-files.zip", "c5vp8")
+# The 1.1 GB OSF CIF archive times out on slow links, so structures come from RCSB one by one instead.
+# shortcut: current RCSB entries, not CryptoBench's snapshot; author numbering is stable, so labels still apply.
+CIF_DIR = RAW / "cif"
 SPLITS = {"test": "folds/test.json", **{f"train-fold-{k}": f"folds/train-fold-{k}.json" for k in range(4)}}
 REQUIRED = ["holo_pdb_id", "apo_chain", "holo_chain", "apo_pocket_selection"]
 
@@ -55,6 +57,42 @@ def download(rel, osf_id):
             for chunk in r.iter_content(1 << 20):
                 f.write(chunk)
         tmp.rename(out)  # no half-written file left behind if the download dies
+
+
+def fetch_cif(pdb_id, tries=3):
+    out = CIF_DIR / f"{pdb_id}.cif.gz"
+    if out.exists() and out.stat().st_size > 0:
+        return None
+    for attempt in range(tries):
+        try:
+            r = requests.get(f"https://files.rcsb.org/download/{pdb_id.upper()}.cif.gz", timeout=60)
+            r.raise_for_status()
+            tmp = out.with_suffix(".part")
+            tmp.write_bytes(r.content)
+            tmp.rename(out)
+            return None
+        except requests.RequestException as e:
+            err = e
+    return f"{pdb_id}: {err}"
+
+
+def download_structures(pairs, splits):
+    """apo + main holo of the chosen splits, plus every structure in the curated manifest."""
+    from concurrent.futures import ThreadPoolExecutor
+    from paths import CURATED
+    sel = pairs[pairs.split.isin(splits) & pairs.is_main_holo]
+    ids = set(sel.apo_pdb_id) | set(sel.holo_pdb_id)
+    man = CURATED / "manifest.csv"
+    if man.exists():
+        m = pd.read_csv(man)
+        ids |= set(m.apo_pdb_id.str.lower()) | set(m.holo_pdb_id.str.lower())
+    CIF_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"fetching {len(ids)} structures from RCSB into {CIF_DIR}")
+    with ThreadPoolExecutor(8) as pool:
+        failed = [f for f in pool.map(fetch_cif, sorted(ids)) if f]
+    print(f"done: {len(ids) - len(failed)} present, {len(failed)} failed")
+    for f in failed:
+        print("  FAILED", f)
 
 
 def pairs_from(dataset, split=None):
@@ -104,14 +142,12 @@ def assign_splits(dataset, split_sets):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cif", action="store_true", help="also download the 1.1 GB CIF archive")
+    ap.add_argument("--structures", nargs="*", metavar="SPLIT",
+                    help="also fetch mmCIFs from RCSB for these splits (default: test) + the curated manifest")
     args = ap.parse_args()
 
     for rel, osf_id in FILES.items():
         download(rel, osf_id)
-    if args.cif:
-        download(*CIF_ZIP)
-        print(f"unzip it with:  unzip -q {RAW / CIF_ZIP[0]} -d {RAW / 'auxiliary-data'}")
 
     dataset = json.loads((RAW / "dataset.json").read_text())
     split_sets = {name: json.loads((RAW / rel).read_text()) for name, rel in SPLITS.items()}
@@ -128,6 +164,8 @@ def main():
     folds_meta = json.loads((RAW / "folds.json").read_text())
     print("folds.json (not used; for reference):", type(folds_meta).__name__,
           list(folds_meta)[:5] if isinstance(folds_meta, dict) else folds_meta[:2])
+    if args.structures is not None:
+        download_structures(pairs, args.structures or ["test"])
 
 
 if __name__ == "__main__":

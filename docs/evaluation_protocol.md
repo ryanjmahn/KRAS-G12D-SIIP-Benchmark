@@ -21,12 +21,15 @@ To check: CryptoBench's contact cutoff for pocket residues, and whether it match
 
 A tool earns credit only for predictions at the true site, so a correct but irrelevant pocket elsewhere (for KRAS, the always-open nucleotide site) does not count.
 
-- **Site centre** = centroid of the Cα atoms of the true pocket residues in the evaluated structure. This generalizes the His95 Cα used for KRAS.
-- A predicted pocket is **at the site** if its centre is within **14 Å** of the site centre.
+- A predicted pocket is **at the site** if its centre is within **4 Å of any ligand heavy atom** (the ligand superposed onto the evaluated structure). This is the standard DCA detection criterion, so one rule serves both detection and the gate, and it needs no target-specific radius.
+- **Site centre** = centroid of the Cα atoms of the true pocket residues. It is used only for the gated variant of probability tools (§4).
 
-The gate uses the answer key, so the localization metrics measure "how well is the true site described, given the tool put something there." The site-agnostic detection metrics in §5 complement this.
+The gate uses the ligand position, so the localization metrics measure "how well is the true site described, given the tool put something there." The site-agnostic detection metrics in §5 complement this.
 
-**Decision recorded:** the KRAS scripts used two gates (pocket centre within 14 Å in `score_anchors.py`; any alpha sphere within 14 Å in `phase3_fpocket.py`) and two fpocket residue rules. This protocol uses the pocket-centre gate and the residue rule in §4 for every tool. KRAS is re-scored under it, and the difference from Table I is reported (§9).
+**Decision recorded (from sanity gate 1b on KRAS):**
+- **Gates:** the KRAS scripts used two gates: pocket centre within 14 Å of His95 Cα in `score_anchors.py`, and any alpha sphere within 14 Å in `phase3_fpocket.py`.
+- **Why 14 Å doesn't carry over:** His95 sits 7.7 Å from the ligand centre. Moved to the true-residue centroid, a 14 Å gate admits nucleotide-side pockets on 7RPZ (fpocket pockets 5 and 7), and fpocket's MCC drops from 0.953 to 0.719 for that reason alone.
+- **What the 4 Å rule keeps:** exactly the SII-P pocket for both tools on 7RPZ (fpocket pocket 1, P2Rank pocket 2).
 
 ## 4. Converting tool outputs to residues
 
@@ -34,8 +37,10 @@ Each tool's raw output is kept untouched in `results/raw/`. An adapter (`src/p1_
 
 | Output type | Tools | Predicted residue set | Per-residue score |
 |---|---|---|---|
-| Ranked pockets | fpocket, P2Rank | Union of residues of all at-site pockets. fpocket: residues with a Cα within 4.5 Å of any of the pocket's alpha spheres. P2Rank: its `residue_ids` list | The score of the best-scoring pocket that contains the residue (fpocket pocket score, P2Rank residue probability); 0 if in no pocket |
+| Ranked pockets | fpocket, P2Rank | Union of residues of all at-site pockets. fpocket: residues of its pocket-lining atoms (`pocketN_atm.pdb`). P2Rank: its `residue_ids` list | The score of the best-scoring pocket that contains the residue (fpocket pocket score, P2Rank residue probability); 0 if in no pocket |
 | Per-residue probability | AE-PocketMiner, pLM-NN | Residues with probability ≥ threshold *t*, whole protein (no gate) | The probability itself |
+
+**fpocket residue rule.** The lining-atom rule is fpocket's own residue output, the counterpart of P2Rank's list. The alternative used in `phase3_fpocket.py` (Cα within 4.5 Å of an alpha sphere) misses residues whose side chains, not Cα, line the pocket. On 7RPZ it drops recall from 0.92 to 0.40.
 
 **Pocket tools** are also scored on the **best single at-site pocket**, so taking the union across fragments can't inflate recall.
 
@@ -111,9 +116,11 @@ These tags are applied per tool per target, from the metrics above, and may over
 - **Leakage check** (`tests/test_no_leakage.py`, sanity gate 2). It fails if any test target shares a UniProt accession with a training target, or if any test–train chain pair exceeds 30% sequence identity (MMseqs2) **[provisional]**.
 - **KRAS:** not in CryptoBench. Before KRAS is used to evaluate Project 2, check the training folds for Ras-family proteins (Pfam PF00071) and report any found.
 
-**Sanity gate 1** (`tests/test_kras_reproduces.py`):
-- (a) Under the original KRAS scripts, the pipeline reproduces `results/anchors_all.csv` within 0.01. On 7RPZ: fpocket recall 0.920 and MCC 0.953; P2Rank recall 0.720 and MCC 0.828; AE-PocketMiner recall 0.400 and MCC 0.125.
-- (b) KRAS is then re-scored under this protocol and every change from (a) is explained.
+**Sanity gate 1** (`tests/test_kras_reproduces.py`; both parts **passed** on 2026-11-08):
+- **(a)** fpocket and P2Rank are re-run from scratch, and the original `score_anchors.py` reproduces `results/anchors_all.csv` (Table I) exactly.
+- **(b)** KRAS is re-scored under this protocol and written to `results/kras_unified.csv`.
+  - **7RPZ:** identical to Table I for all three tools (fpocket MCC 0.953, P2Rank 0.828, AE-PocketMiner 0.125).
+  - **5US4, the one change:** fpocket's MCC goes from 0.318 to 0.523, for two reasons. The answer key is restricted to the 20 residues present (residues 60–64 are unresolved in 5US4), and the 4 Å gate drops two off-site pockets that the 14 Å His95 gate admitted.
 
 ## 10. Curated subset criteria
 

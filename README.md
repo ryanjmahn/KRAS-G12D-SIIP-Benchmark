@@ -243,7 +243,7 @@ python src/phase4_figures/make_figures.py           # Figs. 1–5 + Table II
 **Extension, Phase 0** (same env):
 
 ```bash
-python src/p1_s0_data.py            # CryptoBench JSONs (~16 MB) + split check; add --cif for the 1.1 GB structures
+python src/p1_s0_data.py            # CryptoBench JSONs (~16 MB) + split check; add --structures for test-split mmCIFs from RCSB
 python src/p1_s0_curate.py          # RCSB metadata -> candidates.csv, shortlist_draft.csv
 python tests/test_s0.py
 ```
