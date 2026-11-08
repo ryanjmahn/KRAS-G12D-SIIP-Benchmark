@@ -25,6 +25,7 @@ def test_alignment_ignores_numbering():
     assert len(pairs) == 9
     assert all(j == i + 1 for i, j in pairs)          # paired correctly despite the one-residue offset
     assert align_names(["MSE"], ["MET"]) == [(0, 0)]  # selenomethionine counts as MET
+    assert len(align_names(holo, apo, identical=False)) == 10   # mismatch kept when asked
 
 
 if __name__ == "__main__":

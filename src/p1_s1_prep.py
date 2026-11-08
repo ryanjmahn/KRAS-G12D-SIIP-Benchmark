@@ -37,9 +37,9 @@ QC_DIST, QC_MIN_CONTACT, QC_MAX_RMSD = 6.0, 0.5, 4.0   # flagged targets are sti
 QC_MIN_LABEL_MAP = 0.5   # targets below this or QC_MIN_CONTACT get usable=False and are not scored
 
 
-def targets():
+def targets(splits=("test",)):
     pairs = pd.read_csv(CRYPTOBENCH / "pairs.csv")
-    t = pairs[(pairs.split == "test") & pairs.is_main_holo].copy()
+    t = pairs[pairs.split.isin(splits) & pairs.is_main_holo].copy()
     t["target_id"] = t.apo_pdb_id + "_" + t.holo_pdb_id
     t["truth"] = t.apo_pocket.str.split(";")
     ds = json.loads((CRYPTOBENCH / "raw" / "dataset.json").read_text())
@@ -48,7 +48,7 @@ def targets():
                    for a, hs in ds.items() for h in hs}
     t["holo_pocket"] = [holo_pocket[k] for k in zip(t.apo_pdb_id, t.holo_pdb_id, t.apo_pocket)]
     man = pd.read_csv(CURATED / "manifest.csv")
-    extra = man[man.source == "this_repo"]
+    extra = man[man.source == "this_repo"] if "test" in splits else man.iloc[0:0]   # KRAS rides with the test split
     key = open(ANSWER_KEY / "answer_key_siip_residues.txt").read().split("\n")
     kras_truth = [f"A_{r}" for r in next(l for l in key if l and not l.startswith("#")).split(",")]
     for _, r in extra.iterrows():
@@ -95,8 +95,9 @@ def clean_apo(st, chains):
     return st, dropped
 
 
-def align_names(q, t):
-    """Index pairs (i, j) of identical residues in a global alignment of two residue-name lists."""
+def align_names(q, t, identical=True):
+    """Index pairs (i, j) of aligned residues in a global alignment of two residue-name lists;
+    identical residues only by default (identical=False keeps mismatches, e.g. a G12D mutation)."""
     q = ["MET" if n == "MSE" else n for n in q]
     t = ["MET" if n == "MSE" else n for n in t]
     cigar = gemmi.align_string_sequences(q, t, [], gemmi.AlignmentScoring("b")).cigar_str()
@@ -107,7 +108,7 @@ def align_names(q, t):
             continue
         for _ in range(int(num)):
             if ch == "M":
-                if q[i] == t[j]:
+                if q[i] == t[j] or not identical:
                     pairs.append((i, j))
                 i, j = i + 1, j + 1
             elif ch == "I":
@@ -237,15 +238,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", nargs="*", help="target IDs to (re)prepare")
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--split", nargs="*", default=["test"], help="CryptoBench splits (train: train-fold-0..3)")
     args = ap.parse_args()
-    t = targets()
+    t = targets(args.split)
     if args.only:
         t = t[t.target_id.isin(args.only)]
     rows = t.to_dict("records")
     with ProcessPoolExecutor(args.workers) as pool:
         log = pd.DataFrame(list(pool.map(prep, rows)))
     if not args.only:
-        log.to_csv(RESULTS / "p1_prep_log.csv", index=False)
+        log.to_csv(RESULTS / ("p1_prep_log.csv" if args.split == ["test"] else "p1_prep_log_train.csv"), index=False)
     ok = log[log.status == "ok"]
     print(f"prepared {len(ok)}/{len(log)} targets into {OUT}; usable for scoring: {int(ok.usable.sum()) if len(ok) else 0}")
     if len(ok):

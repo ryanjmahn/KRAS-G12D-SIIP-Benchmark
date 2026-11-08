@@ -37,6 +37,10 @@ FILES = {
     "folds/train-fold-2.json": "nmj39",
     "folds/train-fold-3.json": "btdqy",
 }
+# pLM-NN, CryptoBench's trained baseline (TensorFlow SavedModel, ~9 MB); used by p1_s2b_plmnn.py
+PLMNN_FILES = {f"benchmark/best_trained/{k}": v for k, v in {
+    "saved_model.pb": "nya4f", "fingerprint.pb": "7dwgh", "keras_metadata.pb": "8xqbf",
+    "variables/variables.data-00000-of-00001": "ebr98", "variables/variables.index": "66c328c168e4552e0b0b5315"}.items()}
 # The 1.1 GB OSF CIF archive times out on slow links, so structures come from RCSB one by one instead.
 # shortcut: current RCSB entries, not CryptoBench's snapshot; author numbering is stable, so labels still apply.
 CIF_DIR = RAW / "cif"
@@ -144,9 +148,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--structures", nargs="*", metavar="SPLIT",
                     help="also fetch mmCIFs from RCSB for these splits (default: test) + the curated manifest")
+    ap.add_argument("--plmnn", action="store_true", help="also fetch the trained pLM-NN model from OSF")
     args = ap.parse_args()
 
-    for rel, osf_id in FILES.items():
+    for rel, osf_id in (FILES | PLMNN_FILES if args.plmnn else FILES).items():
         download(rel, osf_id)
 
     dataset = json.loads((RAW / "dataset.json").read_text())

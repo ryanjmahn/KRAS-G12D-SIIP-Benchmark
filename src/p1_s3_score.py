@@ -4,7 +4,7 @@ P1 s3: score every tool on every usable target under docs/evaluation_protocol.md
 Library: score_pockets / score_probs / threshold_free take the adapters' common forms (p1_adapters.py).
 Driver (main): reads runs/p1/<target>/meta.json (prep) and the raw tool outputs (p1_s2_run_baselines.py), and writes
   results/p1_master.csv        one row per target x tool x variant (primary variants: gate4, t0.7)
-  results/p1_pm_sweep.csv      AE-PocketMiner MCC per target per threshold (t* is picked on training folds, not here)
+  results/p1_prob_sweep.csv    probability tools: MCC per target per threshold (t* is picked on training folds, not here)
   results/p1_excluded.csv      targets prep marked unusable, with the reason
 Ground truth is restricted to residues present in the structure.
 
@@ -29,6 +29,10 @@ GATE_SWEEP = (4.0, 6.0, 8.0, 10.0, 12.0)   # sensitivity: published "found" crit
 TOP_K = 3                 # rank-limited variant of pocket tools
 SITE_RADIUS = 14.0        # only for the gated variant of probability tools (Cα within this of the site centre)
 FIXED_T = 0.7             # KRAS threshold for probability tools
+# probability tools: (name, folder under runs/p1, thresholds; first = primary). pLM-NN: CryptoBench's
+# example script uses 0.75, its tutorial notebook says 0.95 "was used in the paper"; both are reported.
+PROB_TOOLS = [("AE-PocketMiner", "pocketminer_out", (FIXED_T,)), ("pLM-NN", "plmnn_out", (0.75, 0.95))]
+IN_SAMPLE = {"pLM-NN"}    # trained on CryptoBench's training folds: no t* from them
 SWEEP = np.round(np.arange(0.05, 0.951, 0.05), 2)
 
 
@@ -106,8 +110,10 @@ def sweep(scores, truth, keys, ca):
     return {float(t): score_probs(scores, truth, keys, ca, t)["mcc"] for t in SWEEP}
 
 
-def score_target(tdir, p2_out, pm_out):
-    """All tools, all variants, for one prepared target."""
+def score_target(tdir, p1, tstar=None):
+    """All tools, all variants, for one prepared target (raw outputs under runs/p1).
+    tstar: {tool: threshold} picked on the training folds, scored as an extra variant."""
+    tstar = tstar or {}
     from p1_adapters import (ca_table, fpocket, p2rank, p2rank_residue_scores, per_residue_probs,
                              pocket_residue_scores)
     meta = json.loads((tdir / "meta.json").read_text())
@@ -117,7 +123,8 @@ def score_target(tdir, p2_out, pm_out):
     lig = np.array(meta["ligand_xyz"])
     base = dict(target_id=tid, split=meta["split"], n_res=len(keys), n_true=len(truth),
                 base_rate=len(truth) / len(keys))   # chance AUPRC; chance MCC is 0
-    rows, sweep_row = [], None
+    rows = []
+    p2_out = p1 / "p2rank_out"
 
     pocket_tools = []
     if (tdir / f"{tid}_out" / f"{tid}_info.txt").exists():
@@ -137,16 +144,23 @@ def score_target(tdir, p2_out, pm_out):
         rows.append(base | dict(tool=tool, variant=f"gate{DCA_SUCCESS:g}_top{TOP_K}", primary=False)
                     | score_pockets(top, truth, keys, ca, lig) | tf | {"n_pockets": len(pockets)})
 
-    pm_file = pm_out / f"{tid}-preds.npy"
-    if pm_file.exists():
-        pm = per_residue_probs(pm_file, keys)
-        tf = threshold_free(pm, truth, keys)
-        rows.append(base | dict(tool="AE-PocketMiner", variant=f"t{FIXED_T}", primary=True)
-                    | score_probs(pm, truth, keys, ca) | tf)
-        rows.append(base | dict(tool="AE-PocketMiner", variant=f"t{FIXED_T}_gated", primary=False)
-                    | score_probs(pm, truth, keys, ca, gated=True) | tf)
-        sweep_row = dict(target_id=tid, split=meta["split"]) | {f"mcc_t{t:.2f}": v for t, v in sweep(pm, truth, keys, ca).items()}
-    return rows, sweep_row
+    sweeps = []
+    for tool, folder, thresholds in PROB_TOOLS:
+        f = p1 / folder / f"{tid}-preds.npy"
+        if not f.exists():
+            continue
+        s = per_residue_probs(f, keys)
+        tf = threshold_free(s, truth, keys)
+        for i, t in enumerate(thresholds):        # first threshold is the primary one
+            rows.append(base | dict(tool=tool, variant=f"t{t:g}", primary=i == 0) | score_probs(s, truth, keys, ca, t) | tf)
+        if tool in tstar:                          # threshold tuned on the training folds
+            rows.append(base | dict(tool=tool, variant="tstar", primary=False, t=tstar[tool])
+                        | score_probs(s, truth, keys, ca, tstar[tool]) | tf)
+        rows.append(base | dict(tool=tool, variant=f"t{thresholds[0]:g}_gated", primary=False)
+                    | score_probs(s, truth, keys, ca, thresholds[0], gated=True) | tf)
+        sweeps.append(dict(target_id=tid, split=meta["split"], tool=tool)
+                      | {f"mcc_t{t:.2f}": v for t, v in sweep(s, truth, keys, ca).items()})
+    return rows, sweeps
 
 
 def main():
@@ -155,6 +169,10 @@ def main():
     ap.add_argument("--split", nargs="*", default=["test", "anchor"], help="meta.json splits to score")
     args = ap.parse_args()
     p1 = RUNS / "p1"
+    train = any(s.startswith("train") for s in args.split)
+    sfx = "_train" if train else ""
+    tfile = RESULTS / "p1_thresholds.json"
+    tstar = {} if train or not tfile.exists() else json.loads(tfile.read_text())
     rows, sweeps, excluded = [], [], []
     for m in sorted(p1.glob("*/meta.json")):
         meta = json.loads(m.read_text())
@@ -164,19 +182,28 @@ def main():
             excluded.append(dict(target_id=meta["target_id"], truth_near_ligand=meta["truth_near_ligand"],
                                  label_map=meta.get("label_map")))
             continue
-        r, s = score_target(m.parent, p1 / "p2rank_out", p1 / "pocketminer_out")
+        r, s = score_target(m.parent, p1, tstar)
         rows += r
-        if s:
-            sweeps.append(s)
+        sweeps += s
     master = pd.DataFrame(rows)
     master["auprc_lift"] = master.auprc / master.base_rate
-    master.to_csv(RESULTS / "p1_master.csv", index=False)
-    pd.DataFrame(sweeps).to_csv(RESULTS / "p1_pm_sweep.csv", index=False)
-    pd.DataFrame(excluded).to_csv(RESULTS / "p1_excluded.csv", index=False)
+    master.to_csv(RESULTS / f"p1_master{sfx}.csv", index=False)
+    sw = pd.DataFrame(sweeps)
+    sw.to_csv(RESULTS / f"p1_prob_sweep{sfx}.csv", index=False)
+    pd.DataFrame(excluded).to_csv(RESULTS / f"p1_excluded{sfx}.csv", index=False)
+    if train:
+        # t* = threshold with the best mean MCC over training targets. Not for tools trained on these folds.
+        cols = [c for c in sw.columns if c.startswith("mcc_t")]
+        picked = {tool: float(g[cols].mean().idxmax()[len("mcc_t"):]) for tool, g in sw.groupby("tool")
+                  if tool not in IN_SAMPLE}
+        tfile.write_text(json.dumps(picked, indent=2))
+        print(f"t* from {sw.target_id.nunique()} training targets: {picked} -> {tfile}")
+        for tool, g in sw.groupby("tool"):
+            print(f"  {tool} mean MCC by threshold:", g[cols].mean().round(3).to_dict())
 
     prim = master[master.primary]
     n = prim.target_id.nunique()
-    print(f"scored {n} targets ({len(excluded)} excluded) -> {RESULTS / 'p1_master.csv'}\n")
+    print(f"scored {n} targets ({len(excluded)} excluded) -> {RESULTS / f'p1_master{sfx}.csv'}\n")
     summary = prim.groupby("tool").agg(targets=("target_id", "nunique"), mcc_median=("mcc", "median"),
                                        mcc_mean=("mcc", "mean"), recall=("recall", "median"),
                                        precision=("precision", "median"), spread=("spread", "median"),

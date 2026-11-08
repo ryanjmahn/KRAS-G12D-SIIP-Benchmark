@@ -58,6 +58,13 @@ Each tool's raw output is kept untouched in `runs/p1/` (`src/p1_s2_run_baselines
 
 **fpocket residue rule.** The lining-atom rule is fpocket's own residue output, the counterpart of P2Rank's list. The alternative used in `phase3_fpocket.py` (Cα within 4.5 Å of an alpha sphere) misses residues whose side chains, not Cα, line the pocket. On 7RPZ it drops recall from 0.92 to 0.40.
 
+**pLM-NN** (CryptoBench's baseline; `src/p1_s2b_plmnn.py`).
+- **Embeddings:** per-residue ESM-2 3B embeddings on the full UniProt sequence (1,022-residue chunks), cut to the residues in the structure by sequence alignment, then CryptoBench's trained model from OSF.
+- **Layer:** CryptoBench's embeddings are the output of **layer 33**, not the final layer 36. Their published 7w19A embedding matches ours at layer 33 with cosine similarity 1.0000 at every residue, and only 0.90 at layer 36. Layer 33 is the last layer of ESM-2 650M, so the setting was probably kept when they moved to 3B.
+- **Precision:** weights are stored in float16 but each layer runs in float32. A float16 run drifts, because a few dimensions reach about 1,300.
+- **Validation:** predictions from our 7w19A embedding and from CryptoBench's are identical (r = 1.0000).
+- **Thresholds:** 0.75 (CryptoBench's example script) is primary and 0.95 (its tutorial, "used in the paper") is a variant. Residues with no UniProt counterpart score 0.
+
 **Rank-limited (top-3) variant.** The primary gate credits an at-site pocket at any rank. fpocket outputs a median of 19 pockets per structure against P2Rank's 4, so it often has *some* pocket at the site (71% vs 58% of targets) but ranks it lower (median 4th vs 1st).
 
 - **Required co-report:** every pocket tool is also scored with only its top 3 ranked pockets eligible (`gate4_top3`), which is how the output is used in practice.
@@ -69,7 +76,9 @@ Each tool's raw output is kept untouched in `runs/p1/` (`src/p1_s2_run_baselines
 
 **Probability tools:**
 - Scored across a threshold sweep (*t* = 0.05 to 0.95, step 0.05).
-- Reported at two fixed thresholds: 0.7, the cutoff used for KRAS, and *t\**, the threshold that maximizes mean MCC on the CryptoBench **training folds** **[provisional]**.
+- Reported at two fixed thresholds: 0.7, the cutoff used for KRAS, and *t\**, the threshold that maximizes mean MCC on the CryptoBench **training folds**.
+  - **AE-PocketMiner:** *t\** = 0.70, picked on 846 training targets (`results/p1_thresholds.json`). This is the same as the KRAS threshold, so its over-prediction is not caused by a badly chosen cut-off.
+  - **pLM-NN:** gets no *t\**, because it was trained on these folds. Its documented thresholds (0.75 and 0.95) are used instead.
 - A second variant restricts predictions to residues within 14 Å of the site centre. This tests whether over-prediction away from the site drives the result.
 
 **Decision recorded:** the primary score for probability tools is ungated, as for KRAS, because they make no pocket-level claim to gate on. The gated variant is a sensitivity analysis.

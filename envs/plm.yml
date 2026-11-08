@@ -1,0 +1,14 @@
+name: plm
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - gemmi
+  - requests
+  - pip
+  - pip:
+      - torch==2.5.1
+      - transformers==4.46.3
+      - accelerate==1.1.1
