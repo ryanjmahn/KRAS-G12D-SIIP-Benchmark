@@ -26,7 +26,12 @@ This protocol fixes how every tool is scored on every target, before any multi-t
 - **Ligand position:** the holo ligand is superposed onto the apo structure by Cα alignment of the true pocket residues. Its heavy atoms and centre are the reference for distances.
 - **Universe (for true negatives):** every standard residue with a Cα atom in the evaluated chain(s).
 
-To check: CryptoBench's contact cutoff for pocket residues, and whether it matches our 4.5 Å. If it differs, report KRAS under both definitions.
+**Checked against current RCSB entries (220 test targets):**
+- **Holo labels:** every CryptoBench holo pocket residue is present in today's holo file. The furthest residue of each pocket from the ligand is 4.34 Å at the median, so CryptoBench's cutoff is about 4–4.5 Å, compatible with the 4.5 Å KRAS key.
+- **Apo labels:** 97.7% of apo pocket residues align (by sequence) onto the holo pocket.
+- **Exclusion:** targets where fewer than half map are dropped as label/numbering mismatches (`label_map` in `meta.json`; `1tmi_3iwd` and `3bk9_7p46`).
+
+**Chance rate.** Every target records its base rate (true residues ÷ all residues): chance AUPRC equals the base rate, and chance MCC is 0. AUPRC is also reported as lift over the base rate.
 
 ## 3. Site gate
 
@@ -52,6 +57,13 @@ Each tool's raw output is kept untouched in `runs/p1/` (`src/p1_s2_run_baselines
 | Per-residue probability | AE-PocketMiner, pLM-NN | Residues with probability ≥ threshold *t*, whole protein (no gate) | The probability itself |
 
 **fpocket residue rule.** The lining-atom rule is fpocket's own residue output, the counterpart of P2Rank's list. The alternative used in `phase3_fpocket.py` (Cα within 4.5 Å of an alpha sphere) misses residues whose side chains, not Cα, line the pocket. On 7RPZ it drops recall from 0.92 to 0.40.
+
+**Rank-limited (top-3) variant.** The primary gate credits an at-site pocket at any rank. fpocket outputs a median of 19 pockets per structure against P2Rank's 4, so it often has *some* pocket at the site (71% vs 58% of targets) but ranks it lower (median 4th vs 1st).
+
+- **Required co-report:** every pocket tool is also scored with only its top 3 ranked pockets eligible (`gate4_top3`), which is how the output is used in practice.
+- **It changes the ranking:** on the 219-target test split, mean MCC is fpocket 0.424 / P2Rank 0.342 under the primary gate, but fpocket 0.183 / P2Rank 0.327 under top-3.
+
+**Gate sensitivity.** Published "found" criteria range over 4–12 Å (Nandakumar, NeurIPS 2026 AI4DD workshop). Every pocket-tool result is therefore also reported at gates of 4, 6, 8, 10 and 12 Å.
 
 **Pocket tools** are also scored on the **best single at-site pocket**, so taking the union across fragments can't inflate recall.
 

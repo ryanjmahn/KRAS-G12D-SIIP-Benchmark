@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from p1_s1_prep import aligned_pairs, kabsch
+from p1_s1_prep import align_names, kabsch
 
 
 def test_kabsch():
@@ -19,12 +19,12 @@ def test_kabsch():
 
 
 def test_alignment_ignores_numbering():
-    names = ["ALA", "CYS", "ASP", "GLU", "PHE", "GLY", "HIS", "ILE", "LYS", "LEU"]
-    holo = [(n, np.array([i, 0.0, 0.0])) for i, n in enumerate(names)]
-    apo = [("TRP", np.zeros(3))] + [(n, np.array([i, 1.0, 0.0])) for i, n in enumerate(names[:4] + ["MSE"] + names[5:])]
-    pairs = aligned_pairs(holo, apo)          # extra N-terminal TRP in apo; PHE->MET is a mismatch, skipped
+    holo = ["ALA", "CYS", "ASP", "GLU", "PHE", "GLY", "HIS", "ILE", "LYS", "LEU"]
+    apo = ["TRP"] + holo[:4] + ["MSE"] + holo[5:]    # extra N-terminal TRP; PHE->MSE is a mismatch, skipped
+    pairs = align_names(holo, apo)
     assert len(pairs) == 9
-    assert all(h[0] == a[0] for h, a in pairs)  # same position index = correctly paired despite the offset
+    assert all(j == i + 1 for i, j in pairs)          # paired correctly despite the one-residue offset
+    assert align_names(["MSE"], ["MET"]) == [(0, 0)]  # selenomethionine counts as MET
 
 
 if __name__ == "__main__":

@@ -33,7 +33,8 @@ STANDARD = {"ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE"
 LOCAL = 12.0           # superpose on matched Cα within this of the ligand (hinge motion elsewhere is ignored)
 MIN_LOCAL, MIN_ALL = 6, 10
 CORE_DEV = 3.0         # Å; iterative core superposition threshold
-QC_DIST, QC_MIN_CONTACT, QC_MAX_RMSD = 6.0, 0.5, 4.0   # flags only; flagged targets are still prepared
+QC_DIST, QC_MIN_CONTACT, QC_MAX_RMSD = 6.0, 0.5, 4.0   # flagged targets are still prepared
+QC_MIN_LABEL_MAP = 0.5   # targets below this or QC_MIN_CONTACT get usable=False and are not scored
 
 
 def targets():
@@ -41,6 +42,11 @@ def targets():
     t = pairs[(pairs.split == "test") & pairs.is_main_holo].copy()
     t["target_id"] = t.apo_pdb_id + "_" + t.holo_pdb_id
     t["truth"] = t.apo_pocket.str.split(";")
+    ds = json.loads((CRYPTOBENCH / "raw" / "dataset.json").read_text())
+    # an apo-holo pair can carry several pockets (different ligands), so key on the apo pocket too
+    holo_pocket = {(a.lower(), h["holo_pdb_id"].lower(), ";".join(h["apo_pocket_selection"])): h["holo_pocket_selection"]
+                   for a, hs in ds.items() for h in hs}
+    t["holo_pocket"] = [holo_pocket[k] for k in zip(t.apo_pdb_id, t.holo_pdb_id, t.apo_pocket)]
     man = pd.read_csv(CURATED / "manifest.csv")
     extra = man[man.source == "this_repo"]
     key = open(ANSWER_KEY / "answer_key_siip_residues.txt").read().split("\n")
@@ -48,7 +54,8 @@ def targets():
     for _, r in extra.iterrows():
         t.loc[len(t) + 10_000] = dict(target_id=r.target_id, apo_pdb_id=r.apo_pdb_id, apo_chain=r.apo_chain,
                                       holo_pdb_id=r.holo_pdb_id, holo_chain=r.holo_chain, ligand=r.ligand,
-                                      ligand_index=None, ligand_chain=None, truth=kras_truth, split="anchor")
+                                      ligand_index=None, ligand_chain=None, truth=kras_truth,
+                                      holo_pocket=kras_truth, split="anchor")   # 5US4 and 7RPZ share numbering
     return t
 
 
@@ -88,15 +95,10 @@ def clean_apo(st, chains):
     return st, dropped
 
 
-def ca_list(chain):
-    return [(r.name, np.array(r["CA"][0].pos.tolist())) for r in chain
-            if r.name in STANDARD | {"MSE"} and r.find_atom("CA", "*")]
-
-
-def aligned_pairs(query, target):
-    """Cα pairs at identical residues of a global sequence alignment (numbering-independent)."""
-    q = ["MET" if n == "MSE" else n for n, _ in query]
-    t = ["MET" if n == "MSE" else n for n, _ in target]
+def align_names(q, t):
+    """Index pairs (i, j) of identical residues in a global alignment of two residue-name lists."""
+    q = ["MET" if n == "MSE" else n for n in q]
+    t = ["MET" if n == "MSE" else n for n in t]
     cigar = gemmi.align_string_sequences(q, t, [], gemmi.AlignmentScoring("b")).cigar_str()
     pairs, i, j, num = [], 0, 0, ""
     for ch in cigar:
@@ -106,7 +108,7 @@ def aligned_pairs(query, target):
         for _ in range(int(num)):
             if ch == "M":
                 if q[i] == t[j]:
-                    pairs.append((query[i][1], target[j][1]))
+                    pairs.append((i, j))
                 i, j = i + 1, j + 1
             elif ch == "I":
                 i += 1
@@ -114,6 +116,19 @@ def aligned_pairs(query, target):
                 j += 1
         num = ""
     return pairs
+
+
+def residue_pairs(apo, holo, apo_chains, holo_chains):
+    """(apo key, holo key, apo Cα, holo Cα) for residues paired by sequence alignment, chain by chain.
+    Numbering-independent; chains are paired in the order CryptoBench lists them."""
+    out = []
+    for ac, hc in zip(apo_chains, holo_chains):
+        a, h = ([r for r in m[0][c] if r.name in STANDARD | {"MSE"} and r.find_atom("CA", "*")]
+                for m, c in ((apo, ac), (holo, hc)))
+        for i, j in align_names([r.name for r in a], [r.name for r in h]):
+            out.append((f"{ac}_{a[i].seqid.num}{a[i].seqid.icode.strip()}", f"{hc}_{h[j].seqid.num}{h[j].seqid.icode.strip()}",
+                        np.array(a[i]["CA"][0].pos.tolist()), np.array(h[j]["CA"][0].pos.tolist())))
+    return out
 
 
 def kabsch(P, Q):
@@ -141,14 +156,10 @@ def ligand_atoms(holo, name, index, chain):
     return np.array([p for _, p in hits]), hits[0][0]
 
 
-def transfer_ligand(apo, holo, apo_chains, holo_chains, lig):
-    """Superpose holo onto apo on Cα paired by sequence alignment, chain by chain."""
-    P, Q = [], []
-    for ac, hc in zip(apo_chains, holo_chains):
-        for h, a in aligned_pairs(ca_list(holo[0][hc]), ca_list(apo[0][ac])):
-            P.append(h)
-            Q.append(a)
-    P, Q = np.array(P), np.array(Q)
+def transfer_ligand(pairs, lig):
+    """Superpose holo onto apo on aligned Cα (from residue_pairs) and move the ligand with it."""
+    P = np.array([p[3] for p in pairs])
+    Q = np.array([p[2] for p in pairs])
     if len(P) < MIN_ALL:
         raise ValueError(f"only {len(P)} identical aligned residues between apo and holo")
     near = np.linalg.norm(P[:, None] - lig[None], axis=2).min(1) <= LOCAL
@@ -185,7 +196,12 @@ def prep(row):
         lchain = None if pd.isna(row["ligand_chain"]) else str(row["ligand_chain"])
         holo = load(row["holo_pdb_id"])
         lig_raw, lig_name = ligand_atoms(holo, row["ligand"], index, lchain)
-        lig, n_fit, rmsd = transfer_ligand(apo, holo, apo_chains, holo_chains, lig_raw)
+        pairs = residue_pairs(apo, holo, apo_chains, holo_chains)
+        lig, n_fit, rmsd = transfer_ligand(pairs, lig_raw)
+        # QC: CryptoBench's apo pocket labels should align onto its holo pocket labels
+        to_holo = {a: h for a, h, _, _ in pairs}
+        holo_pocket = set(row["holo_pocket"])
+        label_map = float(np.mean([to_holo.get(k) in holo_pocket for k in row["truth"]]))
 
         prepared = gemmi.read_structure(str(d / f"{tid}.pdb"))
         residues = {f"{c.name}_{r.seqid.num}{r.seqid.icode.strip()}": r for c in prepared[0] for r in c}
@@ -198,18 +214,21 @@ def prep(row):
         near = [min(np.linalg.norm(lig - np.array(a.pos.tolist()), axis=1).min()
                     for a in residues[k] if a.element.name != "H") <= QC_DIST for k in present]
         contact = float(np.mean(near))
+        usable = contact >= QC_MIN_CONTACT and label_map >= QC_MIN_LABEL_MAP
         meta = dict(target_id=tid, split=row["split"], apo=row["apo_pdb_id"], holo=row["holo_pdb_id"],
                     apo_chains=apo_chains, ligand=lig_name, truth=truth, n_truth_present=len(present),
                     ligand_xyz=np.round(lig, 3).tolist(), fit_ca=n_fit, fit_rmsd=round(rmsd, 3),
-                    truth_near_ligand=round(contact, 3), dropped_residues=dropped)
+                    truth_near_ligand=round(contact, 3), label_map=round(label_map, 3), usable=usable,
+                    dropped_residues=dropped)
         (d / "meta.json").write_text(json.dumps(meta))
         flag = "; ".join(f for f, bad in (("ligand off-pocket", contact < QC_MIN_CONTACT),
+                                          ("labels do not map apo->holo", label_map < QC_MIN_LABEL_MAP),
                                           (f"fit RMSD > {QC_MAX_RMSD}", rmsd > QC_MAX_RMSD),
                                           (f"ligand renamed {row['ligand']}->{lig_name}", lig_name != row["ligand"]))
                          if bad)
         return dict(target_id=tid, status="ok", n_truth=len(truth), n_truth_present=len(present),
                     fit_ca=n_fit, fit_rmsd=round(rmsd, 3), truth_near_ligand=round(contact, 3),
-                    dropped_residues=dropped, qc_flag=flag, error="")
+                    label_map=round(label_map, 3), usable=usable, dropped_residues=dropped, qc_flag=flag, error="")
     except Exception as e:
         return dict(target_id=tid, status="failed", error=f"{type(e).__name__}: {e}")
 
@@ -228,7 +247,7 @@ def main():
     if not args.only:
         log.to_csv(RESULTS / "p1_prep_log.csv", index=False)
     ok = log[log.status == "ok"]
-    print(f"prepared {len(ok)}/{len(log)} targets into {OUT}")
+    print(f"prepared {len(ok)}/{len(log)} targets into {OUT}; usable for scoring: {int(ok.usable.sum()) if len(ok) else 0}")
     if len(ok):
         print(f"fit RMSD median {ok.fit_rmsd.median():.2f} Å, max {ok.fit_rmsd.max():.2f} Å; "
               f"truth residues present: {int(ok.n_truth_present.sum())}/{int(ok.n_truth.sum())}; "

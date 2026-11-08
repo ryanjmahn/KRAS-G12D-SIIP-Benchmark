@@ -37,6 +37,8 @@ def test_pockets():
     assert abs(m["best_single_recall"] - 2 / 3) < 1e-9 and abs(m["dca"] - 1.0) < 1e-9
     assert not m["top1"] and m["top3"] and m["best_rank"] == 2
     assert pocket_residue_scores(pockets, KEYS)["A_3"] == 0.4
+    wide = score_pockets(pockets, TRUTH, KEYS, CA, lig, gate=7.0)    # wider gate admits the 6.1 Å pocket
+    assert wide["fragments"] == 3 and wide["top3"] == m["top3"]       # detection does not depend on the gate
 
 
 def test_probs_gate():
