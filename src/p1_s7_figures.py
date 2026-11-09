@@ -23,39 +23,18 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from paths import FIGURES, RESULTS, RUNS
+from figstyle import COLOR, GREY, TOOLS, dot, finish, style
+from figstyle import save as _save      # shared with Phase 2, see src/figstyle.py
 from p1_s5_robustness import LADDERS, site_volumes
 from p1_s6_aggregate import boot_ci
 
 OUT = FIGURES / "p1"
-TOOLS = ["fpocket", "P2Rank", "AE-PocketMiner", "pLM-NN"]
-COLOR = dict(zip(TOOLS, ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]))   # validated categorical slots 1-4
-GREY = "#8a8a85"
 TAGS = ["success", "partial", "offset", "fragmentation", "over_spread", "miss"]
 KRAS = "kras_g12d_siip"
 
 
-def style():
-    plt.rcParams.update({"font.family": "serif", "font.serif": ["DejaVu Serif", "Times New Roman"], "font.size": 8,
-                         "axes.linewidth": 0.6, "axes.edgecolor": "#333333", "savefig.dpi": 400,
-                         "savefig.bbox": "tight", "lines.linewidth": 2})
-
-
-def finish(ax, grid="x"):
-    ax.spines[["top", "right"]].set_visible(False)
-    getattr(ax, f"{grid}axis").grid(True, color="#e2e2e2", linewidth=0.5)
-    ax.set_axisbelow(True)
-
-
 def save(fig, name, fmts):
-    OUT.mkdir(parents=True, exist_ok=True)
-    for f in fmts:
-        fig.savefig(OUT / f"{name}.{f}")
-    plt.close(fig)
-
-
-def dot(ax, y, v, lo, hi, color, hollow=False):
-    ax.errorbar(v, y, xerr=[[v - lo], [hi - v]], fmt="o", ms=6, color=color, mfc="white" if hollow else color,
-                mew=1.5, elinewidth=1.2, capsize=0)
+    _save(fig, name, fmts, OUT)
 
 
 def fig1(fmts):

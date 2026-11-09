@@ -21,7 +21,7 @@ the conformers' top-TOPK (its frequency) rank the true pocket residues above the
 tool's own apo score does? Paired over targets.
 
 Outputs: results/p2_reliability.csv (per target), results/p2_reliability_summary.csv, printed summary.
-Usage (structprep env): python src/p2_s1_reliability.py
+Usage (structprep env): python src/p2_s1_reliability.py [--test]   # --test reads the held-out split
 """
 import json
 import sys
@@ -33,7 +33,9 @@ from scipy.stats import spearmanr, wilcoxon
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from paths import RESULTS
-from p2_s0_pilot import GENS, N_CONF, OUT, P1, sample, tool_scores
+from p2_s0_pilot import GENS
+from p2_s2_scale import cache_dir
+from p1_s6_aggregate import holm
 
 TOPK = 10
 
@@ -52,31 +54,34 @@ def topk(s, k=TOPK):
     return set(np.argsort(-np.asarray(s), kind="stable")[:k].tolist())
 
 
-def per_target(tid):
-    from p1_adapters import ca_table
+def per_target(f, z=None, name=None):
+    """One cached target (runs/p2_cache/<id>.npz, written by p2_s2_scale.py).
+
+    `z` and `name` override the file, so a control can feed in the same arrays with the labels permuted
+    (tests/test_p2_null.py) without touching the cache.
+    """
     from p1_s3_score import threshold_free
-    meta = json.loads((P1 / tid / "meta.json").read_text())
-    keys, _ = ca_table(P1 / tid / f"{tid}.pdb")
-    truth = set(meta["truth"]) & set(keys)
-    hit = np.array([k in truth for k in keys])
-    apo = tool_scores(P1, tid, keys)
+    z = np.load(f, allow_pickle=False) if z is None else z
+    name = name or f.stem
+    keys, hit = [str(k) for k in z["keys"]], np.asarray(z["hit"]).astype(bool)
+    truth = {k for k, h in zip(keys, hit) if h}
+    names = list(z.files) if hasattr(z, "files") else list(z)
+    tools = sorted(n.split("|", 1)[1] for n in names if n.startswith("apo|"))
     rows = []
-    for tool, a in apo.items():
-        base = dict(parent=tid, tool=tool, n_res=len(keys),
+    for tool in tools:
+        a = z[f"apo|{tool}"].astype(float)
+        base = dict(parent=name, tool=tool, n_res=len(keys),
                     apo_auprc=threshold_free(dict(zip(keys, a)), truth, keys)["auprc"],
                     own_max=float(a.max()), own_top=float(np.sort(a)[-TOPK:].mean()),
                     own_auc_topk=auc(hit[sorted(topk(a))], a[sorted(topk(a))]))
-        ta = topk(a)
+        ta, idx = topk(a), sorted(topk(a))
         for gen in GENS:
-            confs = [tool_scores(OUT / gen, f"{tid}__c{k:02d}", keys).get(tool) for k in range(N_CONF)]
-            if any(c is None for c in confs):
+            if f"{gen}|{tool}" not in names:
                 continue
-            C = np.vstack(confs)
-            rho = np.nanmean([spearmanr(a, c).statistic for c in confs])
-            jac = np.mean([len(ta & topk(c)) / len(ta | topk(c)) for c in confs])
-            # how often each of the apo's top-TOPK residues stays in a conformer's top-TOPK
-            freq = np.array([np.mean([i in topk(c) for c in confs]) for i in sorted(ta)])
-            idx = sorted(ta)
+            C = z[f"{gen}|{tool}"].astype(float)
+            rho = np.nanmean([spearmanr(a, c).statistic for c in C])
+            jac = np.mean([len(ta & topk(c)) / len(ta | topk(c)) for c in C])
+            freq = np.array([np.mean([i in topk(c) for c in C]) for i in idx])
             # does stability ADD to the tool's own score? rank-sum of the two, so nothing is fitted
             combo = pd.Series(a[idx]).rank().to_numpy() + pd.Series(freq).rank().to_numpy()
             rows.append(base | dict(gen=gen, rho=rho, jaccard=jac, sd=float(C.std(0).mean()),
@@ -85,9 +90,13 @@ def per_target(tid):
 
 
 def main():
-    ids = sample()
-    r = pd.DataFrame([x for tid in ids for x in per_target(tid)])
-    r.to_csv(RESULTS / "p2_reliability.csv", index=False)
+    split = "test" if "--test" in sys.argv else "train"
+    sfx = "" if split == "train" else "_test"        # the held-out split writes beside the training results
+    files = sorted(cache_dir(split).glob("*.npz"))
+    if not files:
+        sys.exit(f"no {split} cache; run: python src/p2_s2_scale.py run" + (" --test" if sfx else ""))
+    r = pd.DataFrame([x for f in files for x in per_target(f)])
+    r.to_csv(RESULTS / f"p2_reliability{sfx}.csv", index=False)
 
     out = []
     for (tool, gen), g in r.groupby(["tool", "gen"]):
@@ -98,22 +107,28 @@ def main():
             row[f"auc_{sig}"] = auc(good, sign * g[sig])
         out.append(row)
     s = pd.DataFrame(out)
-    s.to_csv(RESULTS / "p2_reliability_summary.csv", index=False)
+    s.to_csv(RESULTS / f"p2_reliability_summary{sfx}.csv", index=False)
 
-    print(f"{r.parent.nunique()} training targets. TARGET level: does the signal say which predictions are good?")
+    print(f"{r.parent.nunique()} {split} targets. TARGET level: does the signal say which predictions are good?")
     print("  rho_* = Spearman with apo AUPRC; auc_* = AUC for 'apo AUPRC above this tool's median'.")
     print("  rho/jaccard/sd need an ensemble; own_max/own_top are free (no ensemble).")
     print(s.round(3).to_string(index=False))
 
-    print("\nRESIDUE level, among each apo's top-10 residues: AUC of the true pocket residues over the false ones.")
-    print("  freq = how often the residue stays in a conformer's top-10; own = the tool's apo score.")
+    tests = []
     for (tool, gen), g in r.groupby(["tool", "gen"]):
-        line = f"  {tool:15s} {gen:7s} own {g.own_auc_topk.mean():.3f}"
         for col in ("freq_auc_topk", "combo_auc_topk"):
             d = (g[col] - g.own_auc_topk).dropna()
-            p = wilcoxon(d).pvalue if len(d) and (d != 0).any() else np.nan
-            line += f" | {col.split('_')[0]} {g[col].mean():.3f} ({d.mean():+.3f}, p={p:.3g})"
-        print(line + f"  n={int(g.own_auc_topk.notna().sum())}")
+            tests.append(dict(tool=tool, gen=gen, signal=col.split("_")[0], n=len(d),
+                              own=g.own_auc_topk.mean(), mean=g[col].mean(), diff=d.mean(),
+                              wins=int((d > 0).sum()), losses=int((d < 0).sum()),
+                              p=wilcoxon(d).pvalue if len(d) and (d != 0).any() else np.nan))
+    t = pd.DataFrame(tests)
+    t["p_holm"] = holm(t.p.fillna(1).to_numpy())        # one family: every tool x generator x signal
+    t.to_csv(RESULTS / f"p2_reliability_tests{sfx}.csv", index=False)
+    print("\nRESIDUE level, among each apo's top-10 residues: AUC of true pocket residues over false ones.")
+    print("  freq = how often the residue survives perturbation; combo = freq rank-summed with the tool's own")
+    print("  score; own = the tool's apo score alone. p_holm corrects over all rows below.")
+    print(t.round(4).to_string(index=False))
 
 
 if __name__ == "__main__":

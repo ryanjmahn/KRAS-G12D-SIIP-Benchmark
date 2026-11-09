@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # 14 Å gate around the true-residue centroid admits nucleotide-side pockets (fpocket 5, 7).
 DCA_SUCCESS = 4.0
 GATE_SWEEP = (4.0, 6.0, 8.0, 10.0, 12.0)   # sensitivity: published "found" criteria range over 4-12 Å
-TOP_K = 3                 # rank-limited variant of pocket tools
+TOP_K = 3                 # rank-limited variant of pocket tools (--topk sweeps it)
 SITE_RADIUS = 14.0        # only for the gated variant of probability tools (Cα within this of the site centre)
 FIXED_T = 0.7             # KRAS threshold for probability tools
 # probability tools: (name, folder under runs/p1, thresholds; first = primary). pLM-NN: CryptoBench's
@@ -110,7 +110,7 @@ def sweep(scores, truth, keys, ca):
     return {float(t): score_probs(scores, truth, keys, ca, t)["mcc"] for t in SWEEP}
 
 
-def score_target(tdir, p1, tstar=None):
+def score_target(tdir, p1, tstar=None, top_ks=(TOP_K,)):
     """All tools, all variants, for one prepared target (raw outputs under runs/p1).
     tstar: {tool: threshold} picked on the training folds, scored as an extra variant."""
     tstar = tstar or {}
@@ -140,9 +140,10 @@ def score_target(tdir, p1, tstar=None):
                         | score_pockets(pockets, truth, keys, ca, lig, gate=g) | tf)
         # Deployable variant: only the top TOP_K ranked pockets may count. Without it a tool that outputs
         # many pockets (fpocket median 19 vs P2Rank 4) gets oracle credit for a low-ranked hit.
-        top = sorted(pockets, key=lambda p: p["rank"])[:TOP_K]
-        rows.append(base | dict(tool=tool, variant=f"gate{DCA_SUCCESS:g}_top{TOP_K}", primary=False)
-                    | score_pockets(top, truth, keys, ca, lig) | tf | {"n_pockets": len(pockets)})
+        for k in top_ks:
+            top = sorted(pockets, key=lambda p: p["rank"])[:k]
+            rows.append(base | dict(tool=tool, variant=f"gate{DCA_SUCCESS:g}_top{k}", primary=False)
+                        | score_pockets(top, truth, keys, ca, lig) | tf | {"n_pockets": len(pockets)})
 
     sweeps = []
     for tool, folder, thresholds in PROB_TOOLS:
@@ -169,6 +170,8 @@ def main():
     ap.add_argument("--split", nargs="*", default=["test", "anchor"], help="meta.json splits to score")
     ap.add_argument("--root", default=str(RUNS / "p1"), help="folder of prepared targets (runs/p1_ens for ensembles)")
     ap.add_argument("--suffix", default=None, help="output suffix (default: _train for training splits)")
+    ap.add_argument("--topk", nargs="*", type=int, default=[TOP_K],
+                    help="rank cutoffs for the deployable variant; several for a sensitivity sweep")
     args = ap.parse_args()
     p1 = Path(args.root)
     train = any(s.startswith("train") for s in args.split)
@@ -184,7 +187,7 @@ def main():
             excluded.append(dict(target_id=meta["target_id"], truth_near_ligand=meta["truth_near_ligand"],
                                  label_map=meta.get("label_map")))
             continue
-        r, s = score_target(m.parent, p1, tstar)
+        r, s = score_target(m.parent, p1, tstar, tuple(args.topk))
         rows += r
         sweeps += s
     master = pd.DataFrame(rows)

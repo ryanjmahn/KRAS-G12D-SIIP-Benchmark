@@ -19,32 +19,25 @@ Selector values are coarse (10-20 levels), so ties are broken by a fixed hash of
 order; without that, a coverage slice would be filled from whichever targets happen to come first.
 
 Outputs: results/p2_coverage.csv (curves), results/p2_coverage_points.csv (precision + cluster-bootstrap CI at
-20/50/100% coverage), figures/p2/p2_fig1_coverage.{png,pdf}, printed summary.
-Usage (structprep env): python src/p2_s3_coverage.py [--gen random] [--format png pdf]
+20/50/100% coverage), printed summary. The figure is drawn separately, by p2_s4_figures.py.
+Usage (structprep env): python src/p2_s3_coverage.py [--gen random] [--test] [--format png pdf]
 """
 import argparse
 import sys
 import zlib
 from pathlib import Path
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from paths import FIGURES, RESULTS
+from paths import RESULTS
 from p2_s0_pilot import GENS
 from p2_s1_reliability import TOPK, topk
-from p2_s2_scale import CACHE
-from p1_s7_figures import COLOR, GREY, finish, style
+from p2_s2_scale import cache_dir
 
-OUT = FIGURES / "p2"
 TOOLS = ["fpocket", "P2Rank", "AE-PocketMiner"]
 SELECTORS = ["own", "freq", "combo"]
-SEL_LABEL = dict(own="tool's own score", freq="perturbation stability", combo="stability + own score",
-                 own_raw="own score, pooled unnormalised")
 GRID = np.round(np.arange(0.1, 1.001, 0.1), 2)      # coverage levels: keep each target's top 1, 2, ... of TOPK
 POINTS = (0.2, 0.5, 1.0)
 N_BOOT, SEED = 2000, 0
@@ -65,10 +58,10 @@ def _slot(v, tie):
     return s
 
 
-def pooled(gen):
+def pooled(gen, cache):
     """One row per (target, tool, residue): the hit label and each selector's within-target coverage slot."""
     rows = []
-    for f in sorted(CACHE.glob("*.npz")):
+    for f in sorted(cache.glob("*.npz")):
         z = np.load(f, allow_pickle=False)
         keys, hit = [str(k) for k in z["keys"]], z["hit"].astype(bool)
         for tool in TOOLS:
@@ -128,13 +121,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--gen", default="random", choices=GENS)
     ap.add_argument("--format", nargs="+", default=["png", "pdf"])
+    ap.add_argument("--test", action="store_true", help="read the held-out test split instead of training")
     args = ap.parse_args()
-    if not CACHE.exists():
-        sys.exit("no cache; run: python src/p2_s2_scale.py run")
+    split = "test" if args.test else "train"
+    sfx = "_test" if args.test else ""
+    cache = cache_dir(split)
+    if not cache.exists():
+        sys.exit(f"no {split} cache; run: python src/p2_s2_scale.py run" + (" --test" if sfx else ""))
 
     curves, points = [], []
     for gen in GENS:                                  # every generator in the CSV, the chosen one in the figure
-        d = pooled(gen)
+        d = pooled(gen, cache)
         for tool, g in d.groupby("tool"):
             for sel in SELECTORS:
                 p = curve(g, sel)
@@ -150,39 +147,13 @@ def main():
         if gen == args.gen:
             dsel = d
     cv = pd.DataFrame(curves)
-    cv.to_csv(RESULTS / "p2_coverage.csv", index=False)
+    cv.to_csv(RESULTS / f"p2_coverage{sfx}.csv", index=False)
     pt = pd.DataFrame(points)
-    pt.to_csv(RESULTS / "p2_coverage_points.csv", index=False)
+    pt.to_csv(RESULTS / f"p2_coverage_points{sfx}.csv", index=False)
 
-    print(f"Pooled top-{TOPK} apo residues over {dsel.parent.nunique()} targets, generator {args.gen}.")
+    print(f"Pooled top-{TOPK} apo residues over {dsel.parent.nunique()} {split} targets, generator {args.gen}.")
     print("Precision when only the top fraction by each selector is kept (95% cluster bootstrap over targets).")
     print(pt.round(3).to_string(index=False))
-
-    style()
-    fig, axes = plt.subplots(1, len(TOOLS), figsize=(7.2, 2.4), sharey=True)
-    for ax, tool in zip(axes, TOOLS):
-        g = cv[(cv.gen == args.gen) & (cv.tool == tool)]
-        base = g[(g.selector == "own") & (g.coverage == 1.0)].precision.iloc[0]
-        ax.axhline(base, color=GREY, lw=1, ls=(0, (4, 3)), zorder=1)
-        for sel, ls in zip(SELECTORS, ["-", (0, (1, 1.2)), "-"]):
-            s = g[g.selector == sel]
-            ax.plot(s.coverage * 100, s.precision, ls=ls, lw=2.2 if sel == "combo" else 1.6,
-                    color=COLOR[tool], alpha=1.0 if sel == "combo" else 0.5, zorder=3 if sel == "combo" else 2)
-        ax.set_title(tool, fontsize=8, pad=4)
-        ax.set_xlabel("residues kept (%)")
-        ax.set_xlim(0, 100)
-        finish(ax, grid="y")
-    axes[0].set_ylabel(f"precision among kept top-{TOPK}")
-    h = [plt.Line2D([], [], color="#444", lw=2.2), plt.Line2D([], [], color="#444", lw=1.6, alpha=0.6),
-         plt.Line2D([], [], color="#444", lw=1.6, ls=(0, (1, 1.2)), alpha=0.6),
-         plt.Line2D([], [], color=GREY, lw=1, ls=(0, (4, 3)))]
-    axes[-1].legend(h, ["stability + own score", "own score", "stability alone", "keep everything"],
-                    frameon=False, fontsize=6.5, loc="upper right", handlelength=1.8)
-    OUT.mkdir(parents=True, exist_ok=True)
-    for f in args.format:
-        fig.savefig(OUT / f"p2_fig1_coverage.{f}")
-    plt.close(fig)
-    print(f"\nwrote {OUT}/p2_fig1_coverage.{{{','.join(args.format)}}}")
 
     # sensitivity: the other pooling convention, one global ranking of raw values, which lets a target
     # contribute more or fewer residues at a given coverage
