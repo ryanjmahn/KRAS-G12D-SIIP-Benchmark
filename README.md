@@ -177,17 +177,17 @@ Phase 1 measured two things that matter to a user more than average accuracy. Th
 
 The probe is perturbation. Move the backbone slightly, re-run the tool, and see what survives: a prediction that holds up under motion the protein could plausibly make is a different thing from one that appears in a single snapshot. Three generators give the motion — the lowest normal mode, a thermal mix of the ten lowest modes, and a random smooth deformation as the control — at matched amplitudes, so any signal has to beat random perturbation rather than merely beat the apo. The ensembles are a measuring instrument here, not an accuracy device: averaging a tool's scores over them moves AUPRC by only +0.01–0.02, and the random ensemble moves it just as much.
 
-*Pilot (`src/p2_s1_reliability.py`, 100 training targets; scaled to all 846 by `src/p2_s2_scale.py`):*
+*Results (`src/p2_s1_reliability.py`, all 846 usable training targets, 3 generators × 10 conformers each, built and reduced in chunks by `src/p2_s2_scale.py`; Holm correction over all 18 tool × generator × signal tests):*
 
-- **Target level, nothing predicts quality.** No stability signal separates well-predicted from badly-predicted targets (AUC 0.37–0.66, mostly near 0.5) — **and neither does the tool's own confidence** (AUC 0.51–0.55). A tool's score does not tell you whether its answer for this protein is worth anything.
-- **Residue level, a small consistent gain.** Among a tool's top-10 residues, how often a residue survives perturbation ranks true pocket residues above false ones better than the tool's own score, in 9 of 9 tool × generator combinations (+0.004 to +0.095 AUC; significant for AE-PocketMiner, and for P2Rank when rank-summed with the tool's own score).
-- **Random perturbation works as well as the normal modes**, which makes the signal cheap to compute and rules out a dynamics explanation for it.
+- **Target level, nothing predicts quality.** No stability signal separates well-predicted from badly-predicted targets (AUC 0.42–0.59) — **and neither does the tool's own confidence** (AUC 0.52–0.55). A tool's score does not tell you whether its answer for this protein is worth anything.
+- **Residue level, a real but small gain.** Among a tool's top-10 residues, perturbation stability rank-summed with the tool's own score ranks true pocket residues above false ones better than the score alone: fpocket +0.070 AUC (own 0.492, p_holm 2×10⁻⁶), P2Rank +0.024 (own 0.571, p_holm 0.0011), AE-PocketMiner +0.010 (own 0.546, p_holm 0.15 — not significant). Stability alone, without the tool's score, only helps fpocket (+0.075, p_holm 5×10⁻⁵), whose own score is a coin flip because it ties (see the next bullet).
+- **Withholding the unstable predictions helps only fpocket.** Keeping each target's two most stable top-10 residues: fpocket 0.146 → **0.178** precision (paired cluster bootstrap over targets, +0.035, 95% CI 0.021–0.050, p < 0.001), P2Rank 0.377 → 0.383 and AE-PocketMiner 0.265 → 0.267, both with CIs spanning zero. The reason is visible in fpocket's own curve, which is flat on the base rate: it scores a residue by the best pocket containing it, so **84% of targets have a single tied score across the whole top-10** and the tool cannot rank inside its own shortlist at all. Perturbation stability supplies the ranking fpocket lacks; where a tool already has one, it adds nothing.
+- **Random perturbation works as well as the normal modes or better** in every one of the nine combinations, which makes the signal cheap to compute and rules out a dynamics explanation for it.
 
 *Steps:*
 
-- [x] Perturbation-stability signals measured against the tools' own confidence (pilot, 100 targets).
-- [ ] Scale to all 846 usable training targets and re-test with correction for multiple comparisons (`src/p2_s2_scale.py`).
-- [ ] Calibration curves and risk–coverage curves per tool: what precision is reachable if the least stable predictions are withheld?
+- [x] Perturbation-stability signals measured against the tools' own confidence, on all 846 usable training targets, Holm-corrected (`src/p2_s2_scale.py`, `src/p2_s1_reliability.py`).
+- [x] Risk–coverage curves per tool (`src/p2_s3_coverage.py`, `figures/p2/p2_fig1_coverage`): what precision is reachable if the least stable predictions are withheld?
 - [ ] Sanity gate 2 (`tests/test_no_leakage.py`): family-disjoint splits, if anything is fitted.
 - [ ] Add Crypsis and Seq2Pocket to the baseline table; cite Moore (bioRxiv 2026) as concurrent work on the any-rank versus top-3 result.
 
@@ -225,6 +225,7 @@ src/
   p2_s0_pilot.py        perturbation ensembles (normal modes, mode mix, random control) + tool scores
   p2_s1_reliability.py  is perturbation stability a confidence signal?
   p2_s2_scale.py        the same over every training target, chunked (conformers cached, then deleted)
+  p2_s3_coverage.py     risk-coverage curves: precision against the fraction of predictions kept
 data/                   structures, ligand, docking files, ladder volumes, 7RPZ answer key
   cryptobench/          pairs.csv (raw/ downloads are gitignored)
   curated_subset/       manifest.csv (final panel), candidates.csv, shortlist_draft.csv
@@ -288,11 +289,13 @@ python src/p1_s7_figures.py
 **Extension, Phase 2 pilots** (structprep env):
 
 ```bash
+conda activate structprep
 python src/p2_s0_pilot.py build
 for g in nma1 nmaK random; do python src/p1_s2_run_baselines.py --root runs/p2_pilot/$g --log-suffix _p2pilot_$g; done
 python src/p2_s0_pilot.py score
 python src/p2_s2_scale.py cache && python src/p2_s2_scale.py run
 python src/p2_s1_reliability.py
+python src/p2_s3_coverage.py
 ```
 
 `p2_s2_scale.py` keeps only one chunk of conformers on disk at a time (about 2 GB) and reduces each target to per-residue score arrays in `runs/p2_cache/` (about 60 MB for the whole training set), so the sweep never needs the ~38 GB the full set of conformers would occupy.
