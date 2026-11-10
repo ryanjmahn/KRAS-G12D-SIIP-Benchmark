@@ -21,7 +21,8 @@ the conformers' top-TOPK (its frequency) rank the true pocket residues above the
 tool's own apo score does? Paired over targets.
 
 Outputs: results/p2_reliability.csv (per target), results/p2_reliability_summary.csv, printed summary.
-Usage (structprep env): python src/p2_s1_reliability.py [--test]   # --test reads the held-out split
+Usage (structprep env): python src/p2_s1_reliability.py [--test] [--tag NAME]
+  --test reads the held-out split; --tag reads runs/p2_cache_<NAME> (e.g. another amplitude)
 """
 import json
 import sys
@@ -91,8 +92,9 @@ def per_target(f, z=None, name=None):
 
 def main():
     split = "test" if "--test" in sys.argv else "train"
-    sfx = "" if split == "train" else "_test"        # the held-out split writes beside the training results
-    files = sorted(cache_dir(split).glob("*.npz"))
+    tag = sys.argv[sys.argv.index("--tag") + 1] if "--tag" in sys.argv else None
+    sfx = f"_{tag}" if tag else ("" if split == "train" else "_test")
+    files = sorted(cache_dir(split, tag).glob("*.npz"))
     if not files:
         sys.exit(f"no {split} cache; run: python src/p2_s2_scale.py run" + (" --test" if sfx else ""))
     r = pd.DataFrame([x for f in files for x in per_target(f)])

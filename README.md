@@ -194,10 +194,11 @@ The probe is perturbation. Move the backbone slightly, re-run the tool, and see 
 - [x] Figures (`src/p2_s4_figures.py` → `figures/p2/CAPTIONS.md`), sharing one style with Phase 1 (`src/figstyle.py`).
 - [x] Held-out CryptoBench test split (`src/p2_s2_scale.py run --test`, then each analysis with `--test`): effect size replicates, underpowered for significance.
 - [x] Per-target AUPRC confound quantified across all four tools and five metrics (`src/p1_s9_confound.py`).
-- [ ] Perturbation amplitude sweep: every result uses 1.42 Å global Cα RMSD, so "random matches the normal modes" is established only at that amplitude.
+- [x] Perturbation amplitude (`src/p2_s6_amplitude.py`): repeated at **2× amplitude** (2.84 Å global Cα RMSD) on 200 training targets, compared against 1× **on the same targets**. Doubling the motion does not rescue the normal modes — random minus lowest-mode stays positive for AE-PocketMiner (+0.033 → +0.037, p 0.03 → 0.02), is flat for P2Rank (+0.017 → +0.004, n.s. at both), and grows for fpocket (+0.023 n.s. → +0.070, p 0.044). The stability signal itself is *larger* at 2× for every tool (fpocket +0.055 → +0.092), so 1.42 Å is a conservative choice and the headline gain is a floor on this axis as well as on conformer count. Directional only: 87–143 targets contribute per tool, so the intervals are wide.
 - [x] Permuted-label control (`tests/test_p2_null.py`): the whole pipeline re-run with the truth labels shuffled inside each target, as a check that the effect is not an artefact of the analysis.
-- [ ] Sanity gate 2 (`tests/test_no_leakage.py`): family-disjoint splits, if anything is fitted.
-- [ ] Add Crypsis and Seq2Pocket to the baseline table; cite Moore (bioRxiv 2026) as concurrent work on the any-rank versus top-3 result.
+- [x] Sanity gate 2 (family-disjoint splits, if anything is fitted): **not applicable, by construction.** Nothing in Phase 2 is fitted — `combo` is a rank-sum of two quantities computed on the target itself, with no free parameters, so there is no training set to leak from. The only tuned quantity anywhere in the repo is AE-PocketMiner's probability threshold (`results/p1_thresholds.json`), picked on the training folds and applied unchanged to the test split, and CryptoBench's official splits are sequence-clustered, so the folds are already family-disjoint.
+- [ ] Cite Moore (bioRxiv 2026, 10.64898/2026.08.11.743381) as concurrent work on the any-rank versus top-3 result, and Crypsis and Seq2Pocket as current approaches (writing, not code).
+- [ ] ~~Run Crypsis and Seq2Pocket as extra baselines~~ — deliberately out of scope. The claims here are about how predictors are compared, not about which is best, and every result holds within a tool or between tools already measured; adding a stronger predictor would not change any of them.
 
 **Exit criteria:** a usable confidence rule with its risk–coverage curve, or the documented finding that no cheap signal — the tools' own scores included — predicts when a cryptic-pocket prediction is trustworthy.
 
@@ -238,6 +239,7 @@ src/
   p2_s3_coverage.py     risk-coverage curves: precision against the fraction of predictions kept
   p2_s4_figures.py      Phase 2 figures, from the committed CSVs
   p2_s5_robustness.py   ablations (conformer count, shortlist size) and free confidence baselines
+  p2_s6_amplitude.py    does doubling the perturbation amplitude rescue the normal modes?
 data/                   structures, ligand, docking files, ladder volumes, 7RPZ answer key
   cryptobench/          pairs.csv (raw/ downloads are gitignored)
   curated_subset/       manifest.csv (final panel), candidates.csv, shortlist_draft.csv
@@ -310,6 +312,8 @@ python src/p2_s1_reliability.py
 python src/p2_s3_coverage.py
 python src/p2_s4_figures.py
 python src/p2_s5_robustness.py
+python src/p2_s2_scale.py run --scale 2 --gens nma1,random --tag amp2 --limit 200
+python src/p2_s6_amplitude.py
 python tests/test_p2_null.py
 ```
 

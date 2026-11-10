@@ -16,6 +16,7 @@ Usage (structprep env, Java 17):
   python src/p2_s2_scale.py run       # build, run, cache and clean every remaining training target
   python src/p2_s2_scale.py status
   ... --test        the same for the held-out test split, into runs/p2_cache_test
+  ... --scale 2 --gens nma1,random --tag amp2 --limit 200    a reduced check at another amplitude
 """
 import json
 import shutil
@@ -48,7 +49,10 @@ def complete(f):
     return bool(tools) and all(f"{g}|{t}" in z.files for g in GENS for t in tools)
 
 
-def cache_dir(split="train"):
+def cache_dir(split="train", tag=None):
+    """Caches never collide: a tagged run (a different amplitude, say) gets its own folder."""
+    if tag:
+        return RUNS / f"p2_cache_{tag}"
     return CACHE if split == "train" else RUNS / f"p2_cache_{split}"
 
 
@@ -89,11 +93,27 @@ def run_tools(gen):
 
 
 def main():
-    argv = [a for a in sys.argv[1:] if not a.startswith("--")]
-    split = "test" if "--test" in sys.argv else "train"
-    step = argv[0] if argv else ""
+    global GENS
+    import argparse
+    import p2_s0_pilot
+    ap = argparse.ArgumentParser()
+    ap.add_argument("step", nargs="?", default="", choices=["", "cache", "run", "status"])
+    ap.add_argument("--test", action="store_true", help="the held-out split instead of the training folds")
+    ap.add_argument("--scale", type=float, default=1.0, help="multiply the perturbation amplitude")
+    ap.add_argument("--gens", default=None, help="comma-separated subset of the generators")
+    ap.add_argument("--tag", default=None, help="write to runs/p2_cache_<tag> instead of the default cache")
+    ap.add_argument("--limit", type=int, default=0, help="only the first N targets (a reduced check)")
+    args = ap.parse_args()
+    split = "test" if args.test else "train"
+    step = args.step
+    p2_s0_pilot.SCALE = args.scale
+    if args.gens:                               # both modules read their own GENS, so both are set
+        GENS = tuple(args.gens.split(","))
+        p2_s0_pilot.GENS = GENS
     ids = training_ids(split)
-    CA = cache_dir(split)
+    if args.limit:
+        ids = ids[:args.limit]
+    CA = cache_dir(split, args.tag)
     done = {p.stem for p in CA.glob("*.npz") if complete(p)} if CA.exists() else set()
     if step == "status":
         print(f"{len(done)}/{len(ids)} {split} targets cached in {CA}")

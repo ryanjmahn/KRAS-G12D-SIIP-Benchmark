@@ -38,6 +38,7 @@ confProDy(verbosity="none")
 P1, OUT = RUNS / "p1", RUNS / "p2_pilot"
 GENS = ("nma1", "nmaK", "random")
 N_TARGETS, N_CONF, K_MODES, SEED = 100, 10, 10, 0
+SCALE = 1.0                 # multiplies the amplitude schedule; p2_s2_scale --scale sets it
 TRAIN = [f"train-fold-{i}" for i in range(4)]
 
 
@@ -76,7 +77,8 @@ def build_target(tid):
     for gen in GENS:
         for k, v in enumerate(directions(gen, ca.getCoords(), tid)):
             unit = np.sqrt((v ** 2).sum(1).mean())
-            amp = min(MAX_RMSD * (k + 1) / N_CONF, MAX_DISP * unit / np.linalg.norm(v, axis=1).max())
+            amp = min(MAX_RMSD * SCALE * (k + 1) / N_CONF,
+                      MAX_DISP * SCALE * unit / np.linalg.norm(v, axis=1).max())
             disp = v * (amp / unit)
             coords = full.getCoords().copy()
             coords[moving] += disp[atom_idx[moving]]
