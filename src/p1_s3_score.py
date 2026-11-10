@@ -4,7 +4,7 @@ P1 s3: score every tool on every usable target under docs/evaluation_protocol.md
 Library: score_pockets / score_probs / threshold_free take the adapters' common forms (p1_adapters.py).
 Driver (main): reads runs/p1/<target>/meta.json (prep) and the raw tool outputs (p1_s2_run_baselines.py), and writes
   results/p1_master.csv        one row per target x tool x variant (primary variants: gate4, t0.7)
-  results/p1_prob_sweep.csv    probability tools: MCC per target per threshold (t* is picked on training folds, not here)
+  results/p1_prob_sweep.csv    probability tools: MCC and F1 per target per threshold (t* is picked on training folds, not here)
   results/p1_excluded.csv      targets prep marked unusable, with the reason
 Ground truth is restricted to residues present in the structure.
 
@@ -107,7 +107,8 @@ def threshold_free(scores, truth, keys):
 
 
 def sweep(scores, truth, keys, ca):
-    return {float(t): score_probs(scores, truth, keys, ca, t)["mcc"] for t in SWEEP}
+    """Both thresholded metrics at every threshold: the oracle operating point differs between them."""
+    return {float(t): score_probs(scores, truth, keys, ca, t) for t in SWEEP}
 
 
 def score_target(tdir, p1, tstar=None, top_ks=(TOP_K,)):
@@ -160,7 +161,8 @@ def score_target(tdir, p1, tstar=None, top_ks=(TOP_K,)):
         rows.append(base | dict(tool=tool, variant=f"t{thresholds[0]:g}_gated", primary=False)
                     | score_probs(s, truth, keys, ca, thresholds[0], gated=True) | tf)
         sweeps.append(dict(target_id=tid, split=meta["split"], tool=tool)
-                      | {f"mcc_t{t:.2f}": v for t, v in sweep(s, truth, keys, ca).items()})
+                      | {f"{m}_t{t:.2f}": d[m] for t, d in sweep(s, truth, keys, ca).items()
+                         for m in ("mcc", "f1")})
     return rows, sweeps
 
 

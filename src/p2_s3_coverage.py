@@ -47,7 +47,7 @@ def _slot(v, tie):
     """Within-target position by `v`, descending, as a fraction of the target's residues (best = 1/n).
 
     Pooling raw selector values would not work: fpocket scores a residue by the best pocket containing it, so
-    84% of targets have a single tied value across their whole top-TOPK, and an average rank would park every
+    81% of targets have a single tied value across their whole top-TOPK, and an average rank would park every
     one of those residues mid-table while targets that happen to have distinct values filled the top of the
     pool. A coverage slice would then be a sample of targets, not of confident residues. Ranking inside the
     target, with ties broken by a fixed hash, keeps every target's contribution equal at every coverage.

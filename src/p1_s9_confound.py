@@ -17,7 +17,7 @@ What this script shows, from the committed results/p1_master.csv (no re-running 
   3. what it costs: the share of targets whose "well predicted" label changes once the comparison is made
      within base-rate strata rather than against one global median
 
-Outputs: results/p1_confound.csv, printed tables.
+Outputs: results/p1_confound.csv, p1_confound_pairs.csv, p1_leaderboard.csv, printed tables.
 Usage (structprep env): python src/p1_s9_confound.py [--split test]
 """
 import sys
@@ -30,6 +30,7 @@ from scipy.stats import spearmanr, wilcoxon
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from paths import RESULTS
 from p1_s6_aggregate import holm
+from figstyle import boot_ci
 
 METRICS = [("auprc", "AUPRC"), ("auroc", "AUROC"), ("mcc", "MCC"), ("f1", "F1"),
            ("auprc_lift", "AUPRC / base rate")]
@@ -77,88 +78,83 @@ def main():
     print(pd.DataFrame(out).round(3).to_string(index=False))
     print("\nEvery such relabelled target is one the raw comparison places on the wrong side.")
 
-    # 4. the question that decides how much this matters: does the confound change which TOOL wins?
-    # If only per-target labels move, the fix is hygiene. If a published pairwise ranking moves, results
-    # already in the literature may be artefacts of the metric.
-    print("\n4. pairwise tool comparisons under each metric: paired Wilcoxon over the targets both scored,")
-    print("   Holm-corrected within each metric. 'winner' is the higher mean; n.s. means p_holm >= 0.05.")
+    # 4. the question that decides how much this matters: does the choice change which TOOL wins?
+    # Every metric is evaluated on the same targets, and the thresholded metrics appear twice: once at the
+    # default operating point and once at each tool's BEST per-target setting. That second form is what
+    # separates "the metrics disagree" from "one tool was handed a bad threshold" - an oracle no user could
+    # reach, so if a disagreement survives it, the operating point is not the explanation.
+    sweep, sens = RESULTS / "p1_prob_sweep.csv", RESULTS / "p1_master_sens.csv"
+    if not (sweep.exists() and sens.exists()):
+        sys.exit("needs results/p1_prob_sweep.csv and results/p1_master_sens.csv "
+                 "(python src/p1_s3_score.py --topk 1 3 5 --suffix _sens)")
+    sw = pd.read_csv(sweep); sw = sw[sw.split == split]
+    ms = pd.read_csv(sens); ms = ms[(ms.split == split) & ms.variant.str.startswith("gate")]
+
+    frames = {lab: m[["target_id", "tool", col]].rename(columns={col: "v"})
+              for col, lab in METRICS if col in m}
+    for met in ("mcc", "f1"):                       # oracle operating point, per target, per tool
+        cols = [c for c in sw.columns if c.startswith(f"{met}_t")]
+        best = sw.assign(v=sw[cols].max(axis=1))[["target_id", "tool", "v"]]
+        best = pd.concat([best, ms.groupby(["target_id", "tool"], as_index=False)[met].max()
+                                 .rename(columns={met: "v"})], ignore_index=True)
+        frames[f"{met.upper()} @ best"] = best
+
     tools = sorted(m.tool.unique())
-    cmp_rows = []
-    for col, lab in METRICS:
+    rows = []
+    for lab, fr in frames.items():
         tests = []
         for i, a in enumerate(tools):
             for b in tools[i + 1:]:
-                w = m[m.tool.isin([a, b])].pivot_table(index="target_id", columns="tool", values=col).dropna()
-                if len(w) < 10:
+                w = fr[fr.tool.isin([a, b])].pivot_table(index="target_id", columns="tool", values="v").dropna()
+                if len(w) < 10 or not {a, b} <= set(w.columns):
                     continue
                 d = (w[a] - w[b]).to_numpy()
-                tests.append(dict(metric=lab, pair=f"{a} vs {b}", n=len(d), diff=d.mean(),
-                                  winner=a if d.mean() > 0 else b,
-                                  p=wilcoxon(d).pvalue if (d != 0).any() else np.nan))
+                lo, hi = boot_ci(d)                 # bootstrap over targets, so every call carries its CI
+                tests.append(dict(metric=lab, pair=f"{a} vs {b}", n=len(d), diff=d.mean(), lo=lo, hi=hi,
+                                  p=wilcoxon(d).pvalue if (d != 0).any() else np.nan,
+                                  winner=a if d.mean() > 0 else b))
         t = pd.DataFrame(tests)
         if len(t):
-            t["p_holm"] = holm(t.p.fillna(1).to_numpy())
-            cmp_rows.append(t)
-    c = pd.concat(cmp_rows, ignore_index=True)
+            t["p_holm"] = holm(t.p.fillna(1).to_numpy())    # corrected within each metric
+            rows.append(t)
+    c = pd.concat(rows, ignore_index=True)
     c["call"] = np.where(c.p_holm < 0.05, c.winner, "n.s.")
+    c["decided"] = (c.lo > 0) | (c.hi < 0)          # does the bootstrap CI exclude a tie?
     c.to_csv(RESULTS / "p1_confound_pairs.csv", index=False)
-    piv = c.pivot(index="pair", columns="metric", values="call")[[x[1] for x in METRICS if x[1] in set(c.metric)]]
-    print(piv.to_string())
-    # Two different things move these calls and they must not be conflated. The base-rate confound is
-    # isolated by AUPRC vs AUPRC / base rate: same ranking, same threshold-free scoring, only the floor
-    # removed. Every other disagreement also changes what is being measured (AUROC weights the negatives
-    # differently; MCC and F1 score one thresholded set instead of a ranking), so those flips are about the
-    # choice of metric family, which is a separate point.
-    ref, fix = "AUPRC", "AUPRC / base rate"
-    direct = [(p, piv.loc[p, ref], piv.loc[p, fix]) for p in piv.index if piv.loc[p, fix] != piv.loc[p, ref]]
-    other = [(p, c, piv.loc[p, ref], piv.loc[p, c]) for p in piv.index for c in piv.columns
-             if c not in (ref, fix) and piv.loc[p, c] != piv.loc[p, ref]]
-    print(f"\nremoving the base-rate floor alone changes {len(direct)} of {len(piv)} pairwise conclusions:")
-    for p, a, b in direct or [("  (none)", "", "")]:
-        print(f"  {p}: AUPRC says {a}, base-rate-normalised says {b}")
-    print(f"\nseparately, {len(other)} of {len(piv) * (len(piv.columns) - 2)} calls differ between metric")
-    print("families (threshold-free vs thresholded); that is a different argument, not the confound:")
-    for p, c, a, b in other:
-        print(f"  {p}: AUPRC says {a}, {c} says {b}")
 
-    # 5. is that second group really about the metric, or just about the operating point? MCC and F1 score
-    # one thresholded set, and the probability tools are known to over-spread at their defaults, so a flip
-    # could be calibration rather than anything the metric measures. The test: hand EVERY tool its best
-    # setting on each target - the probability tools their best threshold from the sweep, the pocket tools
-    # their best gate and rank cutoff - which upper-bounds what choosing an operating point can buy.
-    sweep, sens = RESULTS / "p1_prob_sweep.csv", RESULTS / "p1_master_sens.csv"
-    if not (sweep.exists() and sens.exists()):
-        print("\n5. skipped: needs results/p1_prob_sweep.csv and results/p1_master_sens.csv "
-              "(python src/p1_s3_score.py --topk 1 3 5 --suffix _sens)")
-        return
-    sw = pd.read_csv(sweep)
-    sw = sw[sw.split == split]
-    cols = [c for c in sw.columns if c.startswith("mcc_t")]
-    best = sw.assign(mcc=sw[cols].max(axis=1))[["target_id", "tool", "mcc"]]
-    ms = pd.read_csv(sens)
-    ms = ms[(ms.split == split) & ms.variant.str.startswith("gate")]
-    best = pd.concat([best, ms.groupby(["target_id", "tool"], as_index=False).mcc.max()], ignore_index=True)
-    print(f"\n5. the same pairs on MCC at each tool's BEST per-target setting ({len(cols)} thresholds for the")
-    print("   probability tools, every gate and rank cutoff for the pocket tools); an oracle upper bound.")
-    rows5 = []
-    for i, a in enumerate(tools):
-        for b in tools[i + 1:]:
-            w = best[best.tool.isin([a, b])].pivot_table(index="target_id", columns="tool", values="mcc").dropna()
-            if len(w) < 10:
-                continue
-            d = (w[a] - w[b]).to_numpy()
-            rows5.append(dict(pair=f"{a} vs {b}", n=len(d), diff=d.mean(),
-                              winner=a if d.mean() > 0 else b,
-                              p=wilcoxon(d).pvalue if (d != 0).any() else np.nan))
-    o = pd.DataFrame(rows5)
-    o["p_holm"] = holm(o.p.fillna(1).to_numpy())
-    o["call"] = np.where(o.p_holm < 0.05, o.winner, "n.s.")
-    o.to_csv(RESULTS / "p1_confound_oracle.csv", index=False)
-    o["MCC at default"] = [piv.loc[p, "MCC"] for p in o.pair]
-    print(o[["pair", "n", "diff", "p_holm", "call", "MCC at default"]].round(4).to_string(index=False))
-    same = [p for p, x, y in zip(o.pair, o.call, o["MCC at default"]) if x == y]
-    print(f"\n{len(same)} of {len(o)} calls are unchanged when every tool gets its best operating point.")
-    print("Unchanged means the thresholded/threshold-free disagreement is not merely a badly chosen threshold.")
+    order = [l for l in frames if l in set(c.metric)]
+    print("\n4. which tool wins, under each metric. '@ best' gives every tool its best per-target operating")
+    print("   point (19 thresholds for the probability tools, every gate and rank cutoff for the pocket")
+    print("   tools). Calls are Holm-corrected within each metric; n.s. means the pair is not separated.")
+    print(c.pivot(index="pair", columns="metric", values="call")[order].to_string())
+    print("\n   mean paired difference with a bootstrap 95% CI over targets (first tool minus second):")
+    for lab in order:
+        g = c[c.metric == lab]
+        print(f"\n   {lab}")
+        print(g[["pair", "n", "diff", "lo", "hi", "p_holm", "decided"]].round(4).to_string(index=False))
+
+    ref, fix = "AUPRC", "AUPRC / base rate"
+    piv = c.pivot(index="pair", columns="metric", values="call")
+    direct = [(p, piv.loc[p, ref], piv.loc[p, fix]) for p in piv.index if piv.loc[p, fix] != piv.loc[p, ref]]
+    print(f"\n5. removing the base-rate floor alone changes {len(direct)} of {len(piv)} pairwise conclusions:")
+    for p, a, b in direct or [("  (none)", "", "")]:
+        print(f"   {p}: AUPRC says {a}, base-rate-normalised says {b}")
+
+    fam = [(p, mc, piv.loc[p, ref], piv.loc[p, mc]) for p in piv.index
+           for mc in ("MCC @ best", "F1 @ best") if mc in piv and piv.loc[p, mc] != piv.loc[p, ref]]
+    nb = len([mc for mc in ("MCC @ best", "F1 @ best") if mc in piv])
+    print(f"\n6. and {len(fam)} of {len(piv) * nb} calls still differ from AUPRC when the thresholded metrics")
+    print("   are given their best operating point, so the disagreement is not a badly chosen threshold:")
+    for p, mc, a, b in fam:
+        print(f"   {p}: AUPRC says {a}, {mc} says {b}")
+
+    print("\n7. the leaderboard, before and after the free fix (mean over targets, best first):")
+    lb = pd.DataFrame({lab: fr.groupby("tool").v.mean() for lab, fr in frames.items()})[order]
+    lb.to_csv(RESULTS / "p1_leaderboard.csv")
+    print(lb.round(4).to_string())
+    print("\n   rank order:")
+    for lab in order:
+        print(f"   {lab:>18s}: " + "  >  ".join(lb[lab].sort_values(ascending=False).index))
 
 
 if __name__ == "__main__":

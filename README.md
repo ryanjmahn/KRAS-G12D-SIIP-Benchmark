@@ -124,28 +124,11 @@ The curated subset is drawn from the test split only, so Project 2 is never eval
 
 Work moves phase by phase: each phase starts only when the previous one's exit criteria are met, and the sanity gates are never skipped.
 
-### Phase 0: Setup and scoping (done)
+### Phase 0: Setup and scoping
 
-- [x] CryptoBench downloaded and its official splits reproduced exactly: every apo structure is in one split, and all are covered (`src/p1_s0_data.py` → `data/cryptobench/pairs.csv`)
-- [x] Curated subset chosen and justified: the RCSB metadata filters in `src/p1_s0_curate.py` → [`data/curated_subset/manifest.csv`](data/curated_subset/manifest.csv)
-- [x] Evaluation protocol written: [`docs/evaluation_protocol.md`](docs/evaluation_protocol.md)
-
-**Curated subset criteria:**
-
-- X-ray structures at ≤ 2.5 Å
-- same oligomeric state in apo and holo, and the same UniProt entry
-- pocket of at least 8 residues; no buffer additives or ions as the ligand
-- at most one target per Pfam family, with drug-like ligands preferred
-
-**What the protocol fixes:**
-
-- residue-level ground truth, plus a site gate: a pocket counts only if its centre is within 4 Å of a ligand atom
-- one adapter per tool, converting its output to a common set of predicted residues
-- detection metrics (top-1/top-3 success within 4 Å of the ligand) kept separate from localization metrics (precision, recall, MCC, distance to the ligand)
-- a threshold-independent AUPRC for tools that output probabilities
-- failure-mode tags
-- paired statistics across targets
-- all tuning on the training folds only
+CryptoBench downloaded and its official splits reproduced exactly (`src/p1_s0_data.py`), the curated
+subset chosen by RCSB metadata filters (`src/p1_s0_curate.py`), and the evaluation protocol written
+down before any tool was run ([`docs/evaluation_protocol.md`](docs/evaluation_protocol.md)).
 
 ### Phase 1: Benchmark pipeline (diagnosis) (done)
 
@@ -153,7 +136,8 @@ Four tools (fpocket, P2Rank, AE-PocketMiner, pLM-NN) on 218 CryptoBench test tar
 
 - **Sanity gate 1 passed:** Table I is reproduced from scratch, and KRAS re-scored under the unified protocol is in `results/kras_unified.csv`.
 - **The ranking depends on the scoring rule, and the rule is a choice.** fpocket beats P2Rank on MCC when any pocket can count; P2Rank wins when only the top-3 pockets can. Both effects are significant after Holm correction, and neither is an artefact of where the lines were drawn: fpocket wins at every site gate from 4 to 12 Å and P2Rank at every rank cutoff of 1, 3 and 5 (`src/p1_s8_sensitivity.py`).
-- **The ranking also depends on the metric, and on a confound inside it** (`src/p1_s9_confound.py`). Per-target AUPRC has a floor at the pocket-residue base rate, which falls with protein size (Spearman −0.604), so it tracks size for every tool — pLM-NN included, which shares no machinery with the structure tools (AUPRC vs base rate 0.49–0.62 across all four). AUROC (0.01–0.25) and AUPRC divided by the base rate (−0.12 to −0.01) do not. Judging targets within base-rate quintiles instead of against one global median **relabels about 20% of them** (18.8–21.6% per tool). Removing the floor alone changes 1 of 6 pairwise tool conclusions; switching between threshold-free and thresholded metrics changes 8 of 18, with fpocket beating both AE-PocketMiner and P2Rank on MCC and F1 while losing to both on AUPRC and AUROC. That second disagreement is not a badly chosen operating point: give every tool its best per-target setting — all 19 thresholds for the probability tools, every gate and rank cutoff for the pocket tools, an oracle no user could reach — and 5 of the 6 MCC conclusions are unchanged, fpocket included. The two metric families are measuring different things, not the same thing at different thresholds.
+- **The ranking also depends on the metric, and the whole leaderboard inverts** (`src/p1_s9_confound.py`). Ranked by AUPRC, AUROC or base-rate-normalised AUPRC: pLM-NN > P2Rank > AE-PocketMiner > **fpocket last**. Ranked by MCC or F1: **fpocket first** > P2Rank > pLM-NN > AE-PocketMiner. The best and worst tools swap places. This is not a badly chosen operating point: give every tool its best per-target setting — all 19 thresholds for the probability tools, every gate and rank cutoff for the pocket tools, an oracle no user reaches — and the order is unchanged, with 8 of 12 pairwise calls still disagreeing with AUPRC. Each call carries a bootstrap 95% CI over targets and is Holm-corrected within its metric.
+- **A base-rate confound sits inside the threshold-free metrics.** Per-target AUPRC has a floor at the pocket-residue base rate, which falls with protein size (Spearman −0.604), so it tracks size for every tool — pLM-NN included, which shares no machinery with the structure tools (AUPRC vs base rate 0.49–0.62 across all four). AUROC (0.01–0.25) and AUPRC divided by the base rate (−0.12 to −0.01) do not. Judging targets within base-rate quintiles instead of against one global median **relabels about 20% of them** (18.8–21.6% per tool) and overturns 1 of 6 pairwise conclusions. The rank order itself is unchanged by the correction, so this is a confound in per-target claims rather than in the leaderboard.
 - **pLM-NN has the best AUPRC.** The MD-trained AE-PocketMiner is significantly worse than both P2Rank and pLM-NN, so the original KRAS claim holds.
 - **Each tool has a characteristic failure.** P2Rank misses, fpocket is offset, and the probability tools over-spread. The tag rules were locked on the training folds.
 - **Robustness:** detection flips along the ladder for 44% of targets with fpocket and 28% with P2Rank. The lowest normal mode gives *less* best-conformer gain than a random-motion control, and fpocket volume does not track how holo-like the pocket is.
@@ -182,33 +166,29 @@ The probe is perturbation. Move the backbone slightly, re-run the tool, and see 
 
 - **Target level: the raw null is itself a confounded measurement.** Taken at face value, no signal separates well-predicted from badly-predicted targets (AUC 0.42–0.59) and neither does the tool's own confidence (0.52–0.55). But AUPRC rises with the pocket-residue base rate, which falls with protein size, so size-like quantities predict "quality" without saying anything about whether the site was found — raw protein size scores AUC 0.643 on fpocket, beating every signal we built. Within base-rate quintiles that collapses to 0.45, and the picture inverts: **the probability tools' own confidence does carry weak target-level signal** (own_max AUC 0.636 AE-PocketMiner, 0.609 P2Rank), while fpocket's stays near chance (0.549) and every perturbation signal stays at or below it (0.49–0.59). Crystallographic B-factors, the standard cheap flexibility proxy, are useless either way (0.49–0.54).
 - **Residue level, a real but small gain.** Among a tool's top-10 residues, perturbation stability rank-summed with the tool's own score ranks true pocket residues above false ones better than the score alone: fpocket +0.070 AUC (own 0.492, p_holm 2×10⁻⁶), P2Rank +0.024 (own 0.571, p_holm 0.0011), AE-PocketMiner +0.010 (own 0.546, p_holm 0.15 — not significant). Stability alone, without the tool's score, only helps fpocket (+0.075, p_holm 5×10⁻⁵), whose own score is a coin flip because it ties (see the next bullet).
-- **Withholding the unstable predictions helps only fpocket.** Keeping each target's two most stable top-10 residues: fpocket 0.146 → **0.178** precision (paired cluster bootstrap over targets, +0.035, 95% CI 0.021–0.050, p < 0.001), P2Rank 0.377 → 0.383 and AE-PocketMiner 0.265 → 0.267, both with CIs spanning zero. The reason is visible in fpocket's own curve, which is flat on the base rate: it scores a residue by the best pocket containing it, so **84% of targets have a single tied score across the whole top-10** and the tool cannot rank inside its own shortlist at all. Perturbation stability supplies the ranking fpocket lacks; where a tool already has one, it adds nothing.
+- **Withholding the unstable predictions helps only fpocket.** Keeping each target's two most stable top-10 residues: fpocket 0.146 → **0.178** precision (paired cluster bootstrap over targets, +0.035, 95% CI 0.021–0.050, p < 0.001), P2Rank 0.377 → 0.383 and AE-PocketMiner 0.265 → 0.267, both with CIs spanning zero. The reason is visible in fpocket's own curve, which is flat on the base rate: it scores a residue by the best pocket containing it, so **81% of targets have a single tied score across the whole top-10** and the tool cannot rank inside its own shortlist at all. Perturbation stability supplies the ranking fpocket lacks; where a tool already has one, it adds nothing.
 - **The residue-level effect needs the conformers and is not an artefact of the shortlist size.** fpocket's gain climbs monotonically with the number of conformers (+0.023 at 1, +0.050 at 5, +0.075 at 10) and is still rising, so 10 conformers is a lower bound; for P2Rank and AE-PocketMiner fewer than ~5 conformers actively *hurts*. Widening the shortlist strengthens the effect rather than explaining it: fpocket +0.055 at top-5, +0.075 at top-10, +0.103 at top-20, as its own AUC falls from 0.500 to 0.477.
+- **Random motion beats the normal modes on the held-out split too.** Paired over targets, random minus lowest-mode stability is positive for all three tools on both splits, and significant on held-out for AE-PocketMiner (+0.044, p 0.003; training +0.025, p 0.0005). P2Rank (+0.034, p 0.07) and fpocket (+0.030, p 0.14) are positive but not significant on 149 and 81 targets. This claim, unlike the fpocket stability gain below, does carry held-out support.
 - **Held out: the effect size replicates, the significance does not.** Re-run on the official CryptoBench test split (218 targets, never used to develop any of this), fpocket's residue-level gain is +0.055 AUC against +0.075 on the training folds, and its precision at 20% coverage is +0.028 against +0.033 — the same direction and nearly the same size. Neither clears significance: the per-target AUC test keeps only the 81 test targets whose top-10 holds both classes (against 331 in training), and the coverage CI is [-0.007, +0.060] against [+0.018, +0.047]. The honest reading is that the test split reproduces the estimate but is roughly four times too small to confirm it, not that the effect failed to replicate.
 - **Random perturbation works as well as the normal modes or better** in every one of the nine combinations, which makes the signal cheap to compute and rules out a dynamics explanation for it.
 
-*Steps:*
-
-- [x] Perturbation-stability signals measured against the tools' own confidence, on all 846 usable training targets, Holm-corrected (`src/p2_s2_scale.py`, `src/p2_s1_reliability.py`).
-- [x] Risk–coverage curves per tool (`src/p2_s3_coverage.py`): what precision is reachable if the least stable predictions are withheld?
-- [x] Figures (`src/p2_s4_figures.py` → `figures/p2/CAPTIONS.md`), sharing one style with Phase 1 (`src/figstyle.py`).
-- [x] Held-out CryptoBench test split (`src/p2_s2_scale.py run --test`, then each analysis with `--test`): effect size replicates, underpowered for significance.
-- [x] Per-target AUPRC confound quantified across all four tools and five metrics (`src/p1_s9_confound.py`).
-- [x] Perturbation amplitude (`src/p2_s6_amplitude.py`): repeated at **2× amplitude** (2.84 Å global Cα RMSD) on 200 training targets, compared against 1× **on the same targets**. Doubling the motion does not rescue the normal modes — random minus lowest-mode stays positive for AE-PocketMiner (+0.033 → +0.037, p 0.03 → 0.02), is flat for P2Rank (+0.017 → +0.004, n.s. at both), and grows for fpocket (+0.023 n.s. → +0.070, p 0.044). The stability signal itself is *larger* at 2× for every tool (fpocket +0.055 → +0.092), so 1.42 Å is a conservative choice and the headline gain is a floor on this axis as well as on conformer count. Directional only: 87–143 targets contribute per tool, so the intervals are wide.
-- [x] Permuted-label control (`tests/test_p2_null.py`): the whole pipeline re-run with the truth labels shuffled inside each target, as a check that the effect is not an artefact of the analysis.
-- [x] Sanity gate 2 (family-disjoint splits, if anything is fitted): **not applicable, by construction.** Nothing in Phase 2 is fitted — `combo` is a rank-sum of two quantities computed on the target itself, with no free parameters, so there is no training set to leak from. The only tuned quantity anywhere in the repo is AE-PocketMiner's probability threshold (`results/p1_thresholds.json`), picked on the training folds and applied unchanged to the test split, and CryptoBench's official splits are sequence-clustered, so the folds are already family-disjoint.
+Perturbation-stability signals are measured against the tools' own confidence over all 846 usable
+training targets and confirmed on the held-out test split, with risk–coverage curves, a permuted-label
+control, and ablations over conformer count, shortlist size and perturbation amplitude. Nothing is
+fitted — the combined signal is a parameter-free rank-sum — so there is no training set to leak from.
 
 **Exit criteria:** a usable confidence rule with its risk–coverage curve, or the documented finding that no cheap signal — the tools' own scores included — predicts when a cryptic-pocket prediction is trustworthy.
 
 ### Phase 3: Writing and submission
 
-- one paper per project, with Project 2 explicitly motivated by Project 1's diagnosis
-- a public reproducibility bundle (code, configs, data manifest)
-- mentor review before submission
+One paper covering both phases, since the findings are one argument: the ranking of cryptic-pocket
+predictors moves under the scoring rule, under the metric family and under base-rate normalisation,
+each robust to its own sensitivity check. A public reproducibility bundle (code, configs, data
+manifest) ships with it, and a mentor reviews before submission.
 
-**Target venues:** ICML or NeurIPS molecular-ML and evaluation workshops; a bioinformatics venue such as IEEE BIBM for the benchmark. Exact deadlines will be confirmed at submission time.
-
-**If Phase 2 runs long,** Project 1 is submitted on its own to the next suitable workshop cycle. Its harness, ensembles and the random-motion control carry over to Project 2.
+**Target venue: ICML 2027.** A fuller benchmark resource — the KRAS case study, the locked failure
+taxonomy and the full tool × target table — is a separate later paper for a bioinformatics venue,
+a different contribution rather than a slice of this one.
 
 ## Repo layout
 

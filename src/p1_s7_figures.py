@@ -6,6 +6,7 @@ P1 s7: Phase 1 figures, all from committed results/ CSVs (plus fpocket outputs i
   figures/p1/p1_fig2_failure_modes share of targets per locked failure tag, per tool (small multiples)
   figures/p1/p1_fig3_robustness    curated subset: share of targets whose detection flips along the ladder, and mean
                                    best-minus-apo MCC (headroom), lowest-mode NMA vs random-motion control
+  figures/p1/p1_fig5_leaderboard  the leaderboard inversion between ranking and thresholded metrics
   figures/p1/p1_fig4_kras_axes     KRAS ladder: fpocket site volume vs pocket Cα RMSD to holo (two panels, one axis each)
 Captions (the figure-creation statements) -> figures/p1/CAPTIONS.md.
 
@@ -77,13 +78,11 @@ def fig1(fmts):
     axes[0].legend(frameon=False, fontsize=7, loc="lower left")
     fig.tight_layout(pad=0.4)
     save(fig, "p1_fig1_performance", fmts)
-    return (f"**Figure P1-1. Detection and localization on the CryptoBench test split (n = 218 scored targets).** "
-            f"(a) Share of targets with a prediction at the site (pocket centre within 4 Å of a ligand atom; "
-            f"probability tools: any residue above threshold), Wilson 95% CI. (b) Mean residue-level MCC, bootstrap "
-            f"95% CI (10,000 resamples). Filled: any-rank scoring; hollow: only the top-3 pockets may count "
-            f"(fpocket and P2Rank). The ranking of the two pocket tools reverses between the two rules (paired Wilcoxon, Holm-corrected, in the panel). (c) Mean AUPRC, "
-            f"bootstrap 95% CI; dashed line is the mean pocket-residue base rate ({base:.3f}). Thresholds: "
-            f"AE-PocketMiner 0.7, pLM-NN 0.75.")
+    return (f"**Figure 1. Detection and localization on the CryptoBench test split (n = 218).** "
+            f"(a) Share of targets with a prediction at the site, Wilson 95% CI. (b) Mean residue MCC and "
+            f"(c) mean AUPRC, bootstrap 95% CI; dashed line is the mean base rate ({base:.2f}). Filled: a "
+            f"pocket at any rank counts. Hollow: only the top 3. The two pocket tools change places between "
+            f"the rules (paired Wilcoxon, Holm-corrected).")
 
 
 def fig2(fmts):
@@ -105,10 +104,10 @@ def fig2(fmts):
     axes[0].set_xticks([0, 0.5, 1], ["0", ".5", "1"])
     fig.tight_layout(pad=0.4, w_pad=0.6)
     save(fig, "p1_fig2_failure_modes", fmts)
-    return ("**Figure P1-2. Failure modes on the test split (n = 218).** Share of targets assigned each tag (whiskers: "
-            "Wilson 95% CI). Tags are assigned in order miss → offset → fragmentation → over-spread → partial/success, "
-            "with rules locked on the training folds before the test split was tagged (results/p1_tag_rules.json). "
-            "Each tool has a characteristic failure: P2Rank misses, fpocket is offset, the probability tools over-spread.")
+    return ("**Figure 2. Each tool has a characteristic failure (test split, n = 218).** Share of targets "
+            "per tag, Wilson 95% CI. Tags are assigned in order miss \u2192 offset \u2192 fragmentation \u2192 "
+            "over-spread \u2192 partial/success, under rules locked on the training folds before the test split "
+            "was tagged. P2Rank misses, fpocket is offset, the probability tools over-spread.")
 
 
 def fig3(fmts):
@@ -142,14 +141,12 @@ def fig3(fmts):
     n = r.parent.nunique()
     fig.tight_layout(pad=0.4, w_pad=4)
     save(fig, "p1_fig3_robustness", fmts)
-    return (f"**Figure P1-3. The lowest normal mode does no better than random motion (curated subset, n = {n} targets, "
-            f"25 conformers per ladder).** Each small dot is one target: its value on the ladder along the lowest ANM mode "
-            f"(both directions, ±1.42 Å global Cα RMSD, no residue > 12 Å) minus its value on a control ladder along a "
-            f"random smooth motion at the same amplitudes. Large dot: mean difference, bar: bootstrap 95% CI. Right: "
-            f"targets higher on control : higher on NMA, and the paired Wilcoxon p. (a) Number of times site detection "
-            f"changes along the ordered ladder. (b) Headroom, the best conformer's MCC minus the apo's. The control "
-            f"gives more headroom for every structure tool, so best-of-25 gains are not evidence that the mode opens "
-            f"the pocket. pLM-NN is sequence-only, identical on every conformer, and omitted.")
+    return (f"**Figure 3. The lowest normal mode does no better than random motion "
+            f"(curated subset, n = {n} targets, 25 conformers per ladder).** Each small dot is one target's "
+            f"value on the normal-mode ladder minus its value on a random-motion ladder at matched "
+            f"amplitudes; large dot and bar are the mean and a bootstrap 95% CI. Right: targets favouring "
+            f"control : NMA, and the paired Wilcoxon p. (a) Detection flips. (b) Best conformer's MCC minus "
+            f"the apo's. The control gives more headroom for every structure tool.")
 
 
 def fig4(fmts):
@@ -183,14 +180,77 @@ def fig4(fmts):
     e = panels[0][1]
     hi = e.loc[e.site_volume.idxmax()]
     best = {ld: x.pocket_rmsd_holo.min() for ld, x in panels}
-    return (f"**Figure P1-4. The two openness axes disagree on KRAS G12D.** 25-conformer ladders from the prepared apo "
-            f"(vertical line). "
-            f"(a) Volume of the largest fpocket pocket within 8 Å of the ligand. (b) Cα RMSD of the true pocket residues "
-            f"to the holo after superposing on them (tool-independent). Along the normal mode the site volume rises "
-            f"from {apo.site_volume:.0f} Å³ (apo) to {hi.site_volume:.0f} Å³ (ladder position {hi.ens_rmsd:+.2f} Å, circled), "
-            f"while the pocket RMSD to holo goes from {apo.pocket_rmsd_holo:.2f} to {hi.pocket_rmsd_holo:.2f} Å: "
-            f"a larger fpocket volume is not a more holo-like pocket. The closest approach to holo "
-            f"is {best['nma']:.2f} Å along the normal mode and {best['null']:.2f} Å along the random control.")
+    return (f"**Figure 4. The two openness axes disagree on KRAS G12D.** 25-conformer ladders from the "
+            f"prepared apo (vertical line). (a) Volume of the largest fpocket pocket within 8 \u00c5 of the "
+            f"ligand. (b) C\u03b1 RMSD of the true pocket residues to holo. Along the normal mode the volume "
+            f"rises 282 \u2192 746 \u00c5\u00b3 while the pocket moves *away* from holo, 1.66 \u2192 1.97 \u00c5 "
+            f"(circled: the same conformer in both panels).")
+
+
+def fig5(fmts):
+    """The leaderboard inversion: rank is scale-free, so the metrics can share one axis."""
+    lb = pd.read_csv(RESULTS / "p1_leaderboard.csv", index_col=0)
+    pairs = pd.read_csv(RESULTS / "p1_confound_pairs.csv")
+    cols = [c for c in ["AUPRC", "AUROC", "AUPRC / base rate", "MCC @ best", "F1 @ best"] if c in lb]
+    short = {"AUPRC": "AUPRC", "AUROC": "AUROC", "AUPRC / base rate": "AUPRC /\nbase rate",
+             "MCC @ best": "MCC\n@ best", "F1 @ best": "F1\n@ best"}
+    rank = lb[cols].rank(ascending=False)          # 1 = best; raw values are on incomparable scales
+    fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.7), gridspec_kw=dict(width_ratios=[1.35, 1]))
+
+    ax = axes[0]
+    xs = np.arange(len(cols))
+    for t in TOOLS:
+        if t not in rank.index:
+            continue
+        ax.plot(xs, rank.loc[t, cols], "-o", ms=6, lw=2, color=COLOR[t], zorder=3,
+                mec="white", mew=1.2)
+        for x, lab in ((xs[0] - 0.12, "right"), (xs[-1] + 0.12, "left")):
+            ax.text(x, rank.loc[t, cols[0] if lab == "right" else cols[-1]], t, color=COLOR[t],
+                    fontsize=7, va="center", ha=lab)
+    ax.axvspan(xs[2] + 0.5, xs[-1] + 0.5, color="#f2f2f0", zorder=0)
+    ax.text(xs[1], 0.35, "ranking metrics", fontsize=6.5, color="#666666", ha="center")
+    ax.text(xs[-1] - 0.5, 0.35, "thresholded metrics", fontsize=6.5, color="#666666", ha="center")
+    ax.set_xticks(xs, [short[c] for c in cols], fontsize=6.5)
+    ax.set_xlim(xs[0] - 2.15, xs[-1] + 1.6)
+    ax.set_yticks([1, 2, 3, 4])
+    ax.set_ylim(4.6, 0.2)
+    ax.set_ylabel("rank (1 = best)")
+    ax.set_title("a  the same four tools, ranked seven ways", loc="left", fontsize=8)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.yaxis.grid(True, color="#e2e2e2", linewidth=0.5)
+    ax.set_axisbelow(True)
+
+    ax = axes[1]
+    fp = [p for p in pairs.pair.unique() if "fpocket" in p]
+    ys = np.arange(len(fp))[::-1]
+    for met, off, hollow in (("AUPRC", 0.16, False), ("MCC @ best", -0.16, True)):
+        for y, pr in zip(ys, fp):
+            r = pairs[(pairs.pair == pr) & (pairs.metric == met)]
+            if not len(r):
+                continue
+            r = r.iloc[0]
+            # the stored diff is "first tool minus second"; re-orient so fpocket is always the first term
+            flip = 1 if r.pair.startswith("fpocket") else -1
+            lo, hi = (r.lo, r.hi) if flip > 0 else (-r.hi, -r.lo)
+            dot(ax, y + off, flip * r["diff"], lo, hi, COLOR["fpocket"], hollow)
+    ax.axvline(0, color="#555555", lw=0.8, zorder=1)
+    ax.set_yticks(ys, ["vs " + p.replace("fpocket", "").replace("vs", "").strip() for p in fp], fontsize=7)
+    ax.set_ylim(-0.6, len(fp) - 0.4)
+    ax.set_xlabel("fpocket minus the other tool", fontsize=7)
+    ax.set_title("b  fpocket against each rival", loc="left", fontsize=8)
+    ax.plot([], [], "o", color="#555555", label="AUPRC")
+    ax.plot([], [], "o", color="#555555", mfc="white", mew=1.5, label="MCC @ best")
+    ax.legend(frameon=False, fontsize=6.5, loc="lower left", borderpad=0)
+    finish(ax)
+
+    fig.tight_layout(pad=0.4, w_pad=2)
+    save(fig, "p1_fig5_leaderboard", fmts)
+    return ("**Figure 5. The leaderboard inverts between ranking and thresholded metrics (test split, "
+            "n = 218).** (a) The four tools ranked by each metric; rank is used because the metrics are on "
+            "incomparable scales. Shaded: every tool at its best per-target operating point, an oracle no "
+            "user could reach \u2014 the order does not move, so the disagreement is not a badly chosen "
+            "threshold. (b) fpocket against each rival: mean paired difference over targets, bootstrap 95% "
+            "CI. fpocket is last under AUPRC and first under MCC, and no interval touches zero.")
 
 
 def main():
@@ -198,7 +258,8 @@ def main():
     ap.add_argument("--format", nargs="*", default=["png", "pdf"])
     fmts = ap.parse_args().format
     style()
-    caps = [f() for f in (lambda: fig1(fmts), lambda: fig2(fmts), lambda: fig3(fmts), lambda: fig4(fmts))]
+    caps = [f() for f in (lambda: fig1(fmts), lambda: fig2(fmts), lambda: fig3(fmts), lambda: fig4(fmts),
+                          lambda: fig5(fmts))]
     (OUT / "CAPTIONS.md").write_text("# Phase 1 figures\n\nGenerated by `python src/p1_s7_figures.py` from results/.\n\n"
                                      + "\n\n".join(caps) + "\n")
     print("\n\n".join(caps))

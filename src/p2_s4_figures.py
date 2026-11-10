@@ -114,19 +114,13 @@ def fig1(args):
     st = {(t_, s): target_auc(tr[(tr.tool == t_) & (tr.gen == args.gen)], s, g, strat=True)[0]
           for t_ in TOOLS for s, g, _ in SIGNALS} if len(sets) > 1 else {}
     own = f"{st.get(('P2Rank', 'own_max'), float('nan')):.2f}" if st else "n/a"
-    return (f"**Figure P2-1. What predicts whether a target's prediction is any good — and why the obvious "
-            f"measurement says the wrong thing (n = {max(ns)} training targets).** For each tool, the AUC for "
-            f"separating its well-predicted targets from the rest, using each candidate confidence signal; "
-            f"bars are bootstrap 95% CIs over targets ({N_BOOT:,} resamples), uncorrected for the 15 "
-            f"comparisons shown. The top two signals are free, needing no ensemble: the tool's own highest apo "
-            f"score and the mean of its top-{TOPK}. The lower three are measured over 10 perturbed conformers "
-            f"({GEN_LABEL[args.gen]}). **Filled:** targets split against one global median of apo AUPRC. "
-            f"**Hollow:** split within base-rate quintiles. The two disagree because per-target AUPRC has a "
-            f"floor at the pocket-residue base rate, which falls with protein size, so the filled markers "
-            f"credit or penalise signals for tracking size rather than prediction quality. Corrected, the "
-            f"probability tools' own confidence separates well from badly predicted targets at AUC "
+    return (f"**Figure 6. What predicts whether a target's prediction is good (n = {max(ns)} training "
+            f"targets).** AUC for separating each tool's well-predicted targets from the rest, by candidate "
+            f"confidence signal; bootstrap 95% CI, uncorrected for 15 comparisons. Filled: one global AUPRC "
+            f"median. Hollow: within base-rate quintiles, which removes the dependence of AUPRC on the base "
+            f"rate. Corrected, the probability tools' own scores reach "
             f"{st.get(('AE-PocketMiner', 'own_max'), float('nan')):.2f} and {own}, where the raw measurement "
-            f"put it near chance, while fpocket's own score and every perturbation signal stay there.")
+            f"put them near chance; fpocket's score and every perturbation signal stay there.")
 
 
 def fig2(args):
@@ -166,17 +160,13 @@ def fig2(args):
     fig.supxlabel("gain in AUC over the tool's own score (mean over targets)", fontsize=8, y=0.02)
     fig.tight_layout(pad=0.4, w_pad=5, rect=(0, 0.05, 1, 1))
     save(fig, "p2_fig2_residue_gain", args.format, OUT)
-    return (f"**Figure P2-2. Among a tool's top-{TOPK} residues, stability under perturbation adds a little to "
-            f"its ranking.** Mean per-target gain in AUC (true pocket residues ranked above false ones) over "
-            f"the tool's own apo score, for each tool and each of the three motion generators. (a) Stability "
-            f"alone: how often the residue stays in a conformer's top-{TOPK}. (b) Stability rank-summed with "
-            f"the tool's own score, so nothing is fitted. Paired Wilcoxon over targets, Holm-corrected across "
-            f"all 18 rows, printed at the right of each row and greyed where p_holm ≥ 0.05; bars are bootstrap 95% CIs of the mean paired difference."
-            + (" Hollow: the held-out test split." if tt is not None else "") +
-            f" Random motion matches or beats the normal modes everywhere, so the signal is not about dynamics. "
-            f"fpocket gains most because it has the least to lose: it scores a residue by the best pocket "
-            f"containing it, so its top-{TOPK} is one tied block on 84% of targets and it cannot rank inside "
-            f"its own shortlist at all.")
+    return (f"**Figure 7. Perturbation stability adds a little to a tool's own residue ranking.** Mean "
+            f"per-target gain in top-{TOPK} AUC over the tool's own apo score, by tool and motion generator; "
+            f"bootstrap 95% CI, with Holm-corrected paired Wilcoxon p at right (grey: p \u2265 0.05). "
+            f"(a) Stability alone. (b) Stability rank-summed with the tool's own score, so nothing is "
+            f"fitted. Random motion matches or beats the normal modes everywhere. fpocket gains most "
+            f"because its top-{TOPK} is a single tied block on 81% of targets."
+            + (" Hollow: held-out test split." if tt is not None else ""))
 
 
 def fig3(args):
@@ -217,15 +207,13 @@ def fig3(args):
     fig.supxlabel(f"share of each target's top-{TOPK} residues kept (%)", fontsize=8, y=0.02)
     fig.tight_layout(pad=0.4, w_pad=1.2, rect=(0, 0.05, 1, 1))
     save(fig, "p2_fig3_coverage", args.format, OUT)
-    n = int(cv.n_targets.max())
-    return (f"**Figure P2-3. Withholding the least stable predictions buys precision only where the tool has no "
-            f"ranking of its own (n = {n} training targets).** Each target contributes its top-{TOPK} apo "
-            f"residues; at a given coverage every target keeps that same share of them, ranked within the "
-            f"target, so no target can crowd out another. Annotated: the gain of stability + own score over the "
-            f"own score alone at 20% coverage, with a paired cluster-bootstrap 95% CI over targets. fpocket's "
-            f"own curve is flat on its base rate because it cannot order its own shortlist; stability supplies "
-            f"the ordering. P2Rank and AE-PocketMiner already rank their shortlists, and gain nothing."
-            + (" Dashed: the held-out test split." if cvt is not None else ""))
+    return (f"**Figure 8. Withholding unstable predictions buys precision only where the tool has no "
+            f"ranking of its own (n = {int(cv.n_targets.max())} training targets).** Every target keeps the "
+            f"same share of its top-{TOPK} apo residues, ranked within the target. Annotated: gain of "
+            f"stability + own score over the own score alone at 20% coverage, paired cluster-bootstrap 95% "
+            f"CI. fpocket's own curve is flat on its base rate; stability supplies the missing ordering. "
+            f"P2Rank and AE-PocketMiner already rank their shortlists and gain nothing."
+            + (" Dashed: held-out test split." if cvt is not None else ""))
 
 
 def main():
