@@ -16,7 +16,7 @@ This project benchmarks three pocket-prediction tools that run without molecular
 
 KRAS was considered undruggable for about three decades until the Switch-II pocket was found to open under a bound ligand (Ostrem et al., 2013). MRTX1133 later used the same pocket in the G12D mutant, which drives the majority of pancreatic ductal adenocarcinoma cases (Waters & Der, 2018). Because a cryptic pocket is absent from the ground-state structure, researchers rely on software to find it. Most of those tools were developed on static, visible pockets, and the cryptic-pocket specialist is usually assumed to be the right default. This project tests that assumption on a clinically important target.
 
-## Phase 1: Structures, answer key and docking check
+## Structures, answer key and docking check
 
 Two high-resolution KRAS G12D crystal structures, both GDP-bound, so the only difference between them is the pocket state:
 
@@ -30,7 +30,7 @@ Two high-resolution KRAS G12D crystal structures, both GDP-bound, so the only di
 - **Openness metric:** SII-P volume measured by fpocket, located by position near the His95 Cα so the same site can be tracked as the structure changes.
 - **Docking check:** MRTX1133 redocked into 7RPZ with AutoDock Vina recovered the crystal pose at **0.96 Å RMSD** (pass threshold ≤ 2 Å), with a predicted affinity of −12.7 kcal/mol.
 
-## Phase 2: MD-free conformational ladder
+## The MD-free conformational ladder
 
 24 conformers were generated from closed 5US4 only, by displacing it in graded steps along its lowest-frequency normal mode (ProDy). This avoids MD, matching the sampling most labs can actually afford.
 
@@ -39,7 +39,7 @@ Two high-resolution KRAS G12D crystal structures, both GDP-bound, so the only di
 
 <p align="center"><img src="figures/fig1_volume.png" alt="SII-P volume across the two crystal structures and the ends of the ladder" width="560"></p>
 
-## Phase 3: Benchmarking the three tools
+## Benchmarking the three tools
 
 All three tools were scored on the same residue set (chain A) with the same rules: a predicted pocket counts only if part of it is within 14 Å of His95, and a residue counts if it is within 4.5 Å of such a pocket. The 14 Å limit stops a tool from earning credit for the nucleotide site, which is already open. AE-PocketMiner gives per-residue probabilities, so residues at or above 0.7 count as predicted. MCC is the main metric because it also credits what a tool correctly leaves alone.
 
@@ -72,7 +72,7 @@ P2Rank found no pocket within 14 Å of the site in 7 of 24 conformers:
 | Intermediate (~400) | 5 | 396–421 | 5 | 0.33 |
 | Open (~720) | 9 | 682–750 | 5 | 0.41 |
 
-## Phase 4: What the results show
+## What the KRAS results show
 
 - **Geometry wins on an open pocket.** Once the cryptic pocket has formed, it is geometrically an ordinary cavity, which fpocket's alpha spheres find well.
 - **The specialist ranked last on both crystal structures.** AE-PocketMiner predicts which residues take part in pocket opening, not where a ligand binds. KRAS is flexible in several regions, so broad flagging has a structural explanation. This reads as a mismatch between the tool's target and the task, not as a defect in the tool.
@@ -90,14 +90,12 @@ Every arm, including the two crystal structures, was re-scored through the same 
 - AE-PocketMiner's broad flagging may be specific to KRAS, which is flexible in several regions.
 - This is one pocket on one target, so the ranking should not be generalized.
 
-## Next steps: conformation-aware cryptic-pocket prediction
+## Extension: how cryptic-pocket predictors are compared
 
-Cryptic pockets are defined by motion, yet fast predictors, AE-PocketMiner included, score one static structure at a time. The follow-up is two projects in sequence:
-
-- **Project 1, the benchmark (diagnosis):** tests whether the KRAS findings hold across many cryptic pockets, under a scoring protocol that works for any tool's output, and measures how unstable static predictions are as a pocket opens.
-- **Project 2, reliability (treatment):** asks when a cryptic-pocket prediction can be trusted, using small backbone perturbations to see which predictions survive and which do not.
-
-Project 1 stands on its own even if Project 2 underperforms. It also supplies everything Project 2 needs: the data, the scoring harness, the ensembles and the baselines to beat.
+Cryptic pockets are defined by motion, yet fast predictors, AE-PocketMiner included, score one static
+structure at a time. The extension scales the KRAS finding to the whole of CryptoBench and asks a question
+the KRAS study could not: how much of a tool's apparent standing comes from the tool, and how much from the
+choices made when scoring it. It is one piece of work and one paper.
 
 **Gaps targeted.** Primary:
 
@@ -115,22 +113,22 @@ Secondary, diagnosed by the benchmark:
 
 | Set | Size | Used for |
 |---|---|---|
-| Full CryptoBench | 1,107 apo structures, 5,493 apo–holo pairs; official sequence-clustered splits (885 training in 4 folds, 222 test) | Large-scale benchmark and Project 2 training |
+| Full CryptoBench | 1,107 apo structures, 5,493 apo–holo pairs; official sequence-clustered splits (885 training in 4 folds, 222 test) | Large-scale benchmark and perturbation sweeps |
 | Curated subset | 35 CryptoBench test targets + KRAS G12D as anchor | Expensive per-target work: ensembles and conformational robustness |
 
-The curated subset is drawn from the test split only, so Project 2 is never evaluated on a protein it trained on.
+The curated subset is drawn from the test split only. Nothing here is fitted, so no split can leak into another.
 
 **Baselines:** fpocket, P2Rank, AE-PocketMiner, pLM-NN (the CryptoBench baseline), and a newer tool such as Seq2Pocket or UniPocket if it can be run.
 
 Work moves phase by phase: each phase starts only when the previous one's exit criteria are met, and the sanity gates are never skipped.
 
-### Phase 0: Setup and scoping
+### Setup
 
 CryptoBench downloaded and its official splits reproduced exactly (`src/p1_s0_data.py`), the curated
 subset chosen by RCSB metadata filters (`src/p1_s0_curate.py`), and the evaluation protocol written
 down before any tool was run ([`docs/evaluation_protocol.md`](docs/evaluation_protocol.md)).
 
-### Phase 1: Benchmark pipeline (diagnosis) (done)
+### What the benchmark shows
 
 Four tools (fpocket, P2Rank, AE-PocketMiner, pLM-NN) on 218 CryptoBench test targets, plus 25-conformer ensembles for the 36-target curated subset. Figures and captions: [`figures/p1/`](figures/p1/CAPTIONS.md).
 
@@ -154,15 +152,13 @@ Four tools (fpocket, P2Rank, AE-PocketMiner, pLM-NN) on 218 CryptoBench test tar
 9. Aggregate across targets (bootstrap confidence intervals, paired Wilcoxon tests with Holm correction, effect sizes) and tag failure modes: miss, fragmentation, over-spread, offset.
 10. Figures.
 
-**Exit criteria (met):** sanity gate 1 passed; a master table of tools × targets × metrics; the conformational-robustness result on the curated subset; statistics done. At that point Project 1 is a standalone, publishable result.
+### When should you believe a prediction?
 
-### Phase 2: When should you believe a cryptic-pocket prediction?
-
-Phase 1 measured two things that matter to a user more than average accuracy. These tools are **unstable**: fpocket's site detection changes on 44% of targets under no more than 1.4 Å of backbone motion, P2Rank's on 28%. And they are **poorly calibrated**: at their default thresholds the probability tools mark far more residues than any pocket holds, on 48–61% of targets. Project 2 asks what a practitioner can do about that. Given one apo structure and no holo, can you tell which predictions to trust?
+The benchmark measured two things that matter to a user more than average accuracy. These tools are **unstable**: fpocket's site detection changes on 44% of targets under no more than 1.4 Å of backbone motion, P2Rank's on 28%. And they are **poorly calibrated**: at their default thresholds the probability tools mark far more residues than any pocket holds, on 48–61% of targets. The next question is what a practitioner can do about that. Given one apo structure and no holo, can you tell which predictions to trust?
 
 The probe is perturbation. Move the backbone slightly, re-run the tool, and see what survives: a prediction that holds up under motion the protein could plausibly make is a different thing from one that appears in a single snapshot. Three generators give the motion — the lowest normal mode, a thermal mix of the ten lowest modes, and a random smooth deformation as the control — at matched amplitudes, so any signal has to beat random perturbation rather than merely beat the apo. The ensembles are a measuring instrument here, not an accuracy device: averaging a tool's scores over them moves AUPRC by only +0.01–0.02, and the random ensemble moves it just as much.
 
-*Results (`src/p2_s1_reliability.py`, all 846 usable training targets, 3 generators × 10 conformers each, built and reduced in chunks by `src/p2_s2_scale.py`; Holm correction over all 18 tool × generator × signal tests):*
+*Findings (`src/p2_s1_reliability.py`, all 846 usable training targets, 3 generators × 10 conformers each, built and reduced in chunks by `src/p2_s2_scale.py`; Holm correction over all 18 tool × generator × signal tests):*
 
 - **Target level: the raw null is itself a confounded measurement.** Taken at face value, no signal separates well-predicted from badly-predicted targets (AUC 0.42–0.59) and neither does the tool's own confidence (0.52–0.55). But AUPRC rises with the pocket-residue base rate, which falls with protein size, so size-like quantities predict "quality" without saying anything about whether the site was found — raw protein size scores AUC 0.643 on fpocket, beating every signal we built. Within base-rate quintiles that collapses to 0.45, and the picture inverts: **the probability tools' own confidence does carry weak target-level signal** (own_max AUC 0.636 AE-PocketMiner, 0.609 P2Rank), while fpocket's stays near chance (0.549) and every perturbation signal stays at or below it (0.49–0.59). Crystallographic B-factors, the standard cheap flexibility proxy, are useless either way (0.49–0.54).
 - **Residue level, a real but small gain.** Among a tool's top-10 residues, perturbation stability rank-summed with the tool's own score ranks true pocket residues above false ones better than the score alone: fpocket +0.070 AUC (own 0.492, p_holm 2×10⁻⁶), P2Rank +0.024 (own 0.571, p_holm 0.0011), AE-PocketMiner +0.010 (own 0.546, p_holm 0.15 — not significant). Stability alone, without the tool's score, only helps fpocket (+0.075, p_holm 5×10⁻⁵), whose own score is a coin flip because it ties (see the next bullet).
@@ -177,9 +173,7 @@ training targets and confirmed on the held-out test split, with risk–coverage 
 control, and ablations over conformer count, shortlist size and perturbation amplitude. Nothing is
 fitted — the combined signal is a parameter-free rank-sum — so there is no training set to leak from.
 
-**Exit criteria:** a usable confidence rule with its risk–coverage curve, or the documented finding that no cheap signal — the tools' own scores included — predicts when a cryptic-pocket prediction is trustworthy.
-
-### Phase 3: Writing and submission
+### Writing and submission
 
 One paper covering both phases, since the findings are one argument: the ranking of cryptic-pocket
 predictors moves under the scoring rule, under the metric family and under base-rate normalisation,
@@ -215,13 +209,13 @@ src/
   p2_s1_reliability.py  is perturbation stability a confidence signal?
   p2_s2_scale.py        the same over every training target, chunked (conformers cached, then deleted)
   p2_s3_coverage.py     risk-coverage curves: precision against the fraction of predictions kept
-  p2_s4_figures.py      Phase 2 figures, from the committed CSVs
+  p2_s4_figures.py      reliability figures, from the committed CSVs
   p2_s5_robustness.py   ablations (conformer count, shortlist size) and free confidence baselines
   p2_s6_amplitude.py    does doubling the perturbation amplitude rescue the normal modes?
 data/                   structures, ligand, docking files, ladder volumes, 7RPZ answer key
   cryptobench/          pairs.csv (raw/ downloads are gitignored)
   curated_subset/       manifest.csv (final panel), candidates.csv, shortlist_draft.csv
-tests/                  test_s0.py (Phase 0 self-checks)
+tests/                  test_s0.py (loader self-checks)
 results/                per-tool CSVs, anchor table (Table I), cluster table (Table II)
 figures/                paper Figs. 1–5
 docs/                   paper.pdf (the manuscript), evaluation_protocol.md (extension)
@@ -253,7 +247,7 @@ python src/phase4_figures/make_figures.py           # Figs. 1–5 + Table II
 
 `answer_key.py` regenerates the answer key, but it overwrites the notes at the end of the saved file, so it doesn't need to be re-run.
 
-**Extension, Phase 0** (same env):
+**Extension, data and setup** (same env):
 
 ```bash
 python src/p1_s0_data.py            # CryptoBench JSONs (~16 MB) + split check; add --structures for test-split mmCIFs from RCSB
@@ -261,7 +255,7 @@ python src/p1_s0_curate.py          # RCSB metadata -> candidates.csv, shortlist
 python tests/test_s0.py
 ```
 
-**Extension, Phase 1** (structprep env; pLM-NN uses `envs/plm.yml`):
+**Extension, the benchmark** (structprep env; pLM-NN uses `envs/plm.yml`):
 
 ```bash
 python src/p1_s1_prep.py && python src/p1_s1_prep.py --split train-fold-0 train-fold-1 train-fold-2 train-fold-3
@@ -278,7 +272,7 @@ python src/p1_s6_aggregate.py lock && python src/p1_s6_aggregate.py tags && pyth
 python src/p1_s7_figures.py
 ```
 
-**Extension, Phase 2 pilots** (structprep env):
+**Extension, perturbation and reliability** (structprep env):
 
 ```bash
 conda activate structprep

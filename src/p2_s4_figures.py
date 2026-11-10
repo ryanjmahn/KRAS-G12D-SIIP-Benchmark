@@ -1,5 +1,5 @@
 """
-P2 s4: Phase 2 figures, all from committed results/ CSVs (the same split of work as p1_s7_figures.py).
+P2 s4: reliability figures (6-8), all from committed results/ CSVs (the same split of work as p1_s7_figures.py).
 
   figures/p2/p2_fig1_target_null   can anything tell you whether to trust a target's prediction? (the answer
                                    is no, including the tool's own confidence) -- results/p2_reliability.csv
@@ -224,7 +224,7 @@ def main():
     style()
     caps = [f(args) for f in (fig1, fig2, fig3)]
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "CAPTIONS.md").write_text("# Phase 2 figures\n\n" + "\n\n".join(caps) + "\n")
+    (OUT / "CAPTIONS.md").write_text("# Figures 6-8: reliability\n\n" + "\n\n".join(caps) + "\n")
     print("\n\n".join(caps))
     print(f"\n-> {OUT}")
 

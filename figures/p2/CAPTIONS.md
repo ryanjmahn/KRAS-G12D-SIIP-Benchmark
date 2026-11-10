@@ -1,4 +1,4 @@
-# Phase 2 figures
+# Figures 6-8: reliability
 
 **Figure 6. What predicts whether a target's prediction is good (n = 846 training targets).** AUC for separating each tool's well-predicted targets from the rest, by candidate confidence signal; bootstrap 95% CI, uncorrected for 15 comparisons. Filled: one global AUPRC median. Hollow: within base-rate quintiles, which removes the dependence of AUPRC on the base rate. Corrected, the probability tools' own scores reach 0.64 and 0.61, where the raw measurement put them near chance; fpocket's score and every perturbation signal stay there.
 
