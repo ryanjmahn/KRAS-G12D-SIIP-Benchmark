@@ -103,11 +103,20 @@ def main():
             coords[f.stem] = ca_table(p)[1]
     d = pd.DataFrame([r for f in files for r in per_target(f, coords)])
 
+    # only the official splits: the KRAS anchor also sits in the cache (src/t3_kras.py extracts it on
+    # demand) and must never be swept into the training set by a later rebuild
     split = {}
     for m in sorted((RUNS / "p1").glob("*/meta.json")):
         j = json.loads(m.read_text())
-        split[j["target_id"]] = "test" if j["split"] == "test" else "train"
+        if j["split"] == "test":
+            split[j["target_id"]] = "test"
+        elif j["split"].startswith("train-fold-"):
+            split[j["target_id"]] = "train"
     d["split"] = d.parent.map(split)
+    dropped = d.split.isna().sum()
+    d = d[d.split.notna()]
+    if dropped:
+        print(f"dropped {dropped} rows outside the official splits (e.g. the KRAS anchor)")
 
     # target (a) needs the per-target MCC, which lives in the scored master tables
     mcc = pd.concat([pd.read_csv(RESULTS / n)[["target_id", "tool", "mcc", "primary"]]

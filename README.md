@@ -72,6 +72,31 @@ the backbone and re-running shows which predictions survive:
 Nothing is fitted — the combined signal is a parameter-free rank-sum — so no split can leak into another.
 **Target venue: ICML 2027.**
 
+## When should you believe a prediction?
+
+A prediction's trustworthiness is not self-certifying but it is cross-certifying. Agreement between tools
+that share no machinery predicts whether a tool's top-10 residues contain a true pocket residue, where the
+tool's own confidence does not. Fitted on the 846 training targets over CryptoBench's family-disjoint folds,
+evaluated once on the 218 held out, measured inside base-rate quintiles throughout.
+
+| tool | right on all targets | stratified AUC (own score → trust rule) | precision when the rule says investigate |
+|---|---|---|---|
+| fpocket | 37% | 0.530 → **0.785** | **75%** (36 of 218 flagged, lift +0.38 [+0.24, +0.51]) |
+| AE-PocketMiner | 70% | 0.566 → 0.782 | 83% (lift +0.13) |
+| P2Rank | 72% | 0.578 → 0.612 | 82% (lift +0.11) |
+
+The shipped rule uses agreement among the three structure tools only, so it needs no sequence model; adding
+agreement with pLM-NN is the ablation (`rule_full.json`) and is what identifies independent machinery as the
+mechanism. Calibrated out-of-fold, ECE 0.049–0.068. pLM-NN itself gains nothing: its training split holds 35
+negatives, so there is nothing to learn, and its row is a limitation rather than a result.
+
+```python
+from t3_rule import trust
+trust(row, "fpocket")      # -> (score, calibrated probability, recommended action)
+```
+
+Spec and staged plan: [`docs/plan/TRUST_RULE_EXPERIMENT.md`](docs/plan/TRUST_RULE_EXPERIMENT.md).
+
 ## Repo layout
 
 ```
@@ -80,9 +105,11 @@ src/  phase1_validation/ phase2_ladder/ phase3_benchmark/ phase4_figures/   the 
                         gate/cutoff sensitivity, the metric and base-rate analysis
       p2_s0..s6_*.py    perturbation ensembles, reliability, chunked sweep, risk-coverage,
                         figures, ablations, amplitude
+      t0..t3_*.py       trust rule: feature extraction, consensus, model selection, held-out
+                        evaluation, calibration, the released rule, the KRAS example
       p1_adapters.py    tool output -> residue sets    figstyle.py  shared figure style
 data/ structures, ligand, docking, cryptobench/, curated_subset/
-results/ per-tool CSVs   figures/ p1/ (Figs 1-5) p2/ (Figs 6-8)   docs/ paper.pdf, evaluation_protocol.md
+results/ per-tool CSVs   figures/ p1/ (Figs 1-5) p2/ (Figs 6-8) trust/ (risk-coverage, reliability)   docs/ paper.pdf, evaluation_protocol.md
 tests/ self-checks incl. test_p2_null.py (permuted-label control)   envs/ conda environments
 ```
 
