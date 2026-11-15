@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+import srcpath  # noqa: F401  (puts the src/ subfolders on the path)
 from p1_s1_prep import align_names, kabsch
 
 

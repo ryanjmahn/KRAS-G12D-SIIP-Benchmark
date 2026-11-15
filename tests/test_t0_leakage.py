@@ -24,6 +24,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+import srcpath  # noqa: F401  (puts the src/ subfolders on the path)
 import t0_features as T
 from p1_adapters import ca_table
 from paths import RUNS

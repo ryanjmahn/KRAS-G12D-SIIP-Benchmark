@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+import srcpath  # noqa: F401  (puts the src/ subfolders on the path)
 from p1_s0_data import assign_splits
 import pandas as pd
 

@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+import srcpath  # noqa: F401  (puts the src/ subfolders on the path)
 import numpy as np
 
 from p1_s6_aggregate import RULES, holm, rank_biserial, tag_table, wilson

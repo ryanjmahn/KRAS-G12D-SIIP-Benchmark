@@ -28,6 +28,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+import srcpath  # noqa: F401  (puts the src/ subfolders on the path)
 from p2_s1_reliability import per_target
 from p2_s2_scale import CACHE
 from p2_s3_coverage import GRID, curve, pooled

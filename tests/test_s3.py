@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+import srcpath  # noqa: F401  (puts the src/ subfolders on the path)
 from p1_adapters import pocket_residue_scores
 from p1_s3_score import confusion, score_pockets, score_probs, threshold_free
 

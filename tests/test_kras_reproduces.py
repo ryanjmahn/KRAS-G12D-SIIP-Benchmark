@@ -15,6 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+import srcpath  # noqa: F401  (puts the src/ subfolders on the path)
 from paths import P2RANK_ANCHOR_OUT, PRANK, RESULTS, STRUCTURES
 
 # Table I as published: (structure, tool) -> (precision, recall, mcc, n_predicted)

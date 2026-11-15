@@ -91,7 +91,7 @@ mechanism. Calibrated out-of-fold, ECE 0.049–0.068. pLM-NN itself gains nothin
 negatives, so there is nothing to learn, and its row is a limitation rather than a result.
 
 ```python
-from t3_rule import trust
+from trust.t3_rule import trust  # or: sys.path += ['src']; from t3_rule import trust
 trust(row, "fpocket")      # -> (score, calibrated probability, recommended action)
 ```
 
@@ -100,17 +100,23 @@ Spec and staged plan: [`docs/plan/TRUST_RULE_EXPERIMENT.md`](docs/plan/TRUST_RUL
 ## Repo layout
 
 ```
-src/  phase1_validation/ phase2_ladder/ phase3_benchmark/ phase4_figures/   the KRAS study
-      p1_s0..s9_*.py    extension: data, prep, baselines, scoring, ensembles, stats, figures,
-                        gate/cutoff sensitivity, the metric and base-rate analysis
-      p2_s0..s6_*.py    perturbation ensembles, reliability, chunked sweep, risk-coverage,
-                        figures, ablations, amplitude
-      t0..t3_*.py       trust rule: feature extraction, consensus, model selection, held-out
-                        evaluation, calibration, the released rule, the KRAS example
-      p1_adapters.py    tool output -> residue sets    figstyle.py  shared figure style
-data/ structures, ligand, docking, cryptobench/, curated_subset/
-results/ per-tool CSVs   figures/ p1/ (Figs 1-5) p2/ (Figs 6-8) trust/ (risk-coverage, reliability)   docs/ paper.pdf, evaluation_protocol.md
-tests/ self-checks incl. test_p2_null.py (permuted-label control)   envs/ conda environments
+src/
+  paths.py  figstyle.py  p1_adapters.py  srcpath.py     shared: locations, figure style,
+                                                        tool-output adapters, import path
+  kras/          phase1_validation/ phase2_ladder/ phase3_benchmark/ phase4_figures/
+                 the original KRAS G12D study
+  benchmark/     p1_s0..s9  data, prep, baselines, scoring, ensembles, robustness, statistics,
+                 figures, gate/cutoff sensitivity, the metric and base-rate analysis
+  perturbation/  p2_s0..s6  perturbation ensembles, reliability, chunked sweep, risk-coverage,
+                 figures, ablations, amplitude
+  trust/         t0..t3     feature extraction, consensus, model selection, held-out evaluation,
+                 calibration, the released rule, the KRAS example
+data/     structures, ligand, docking, cryptobench/, curated_subset/
+results/  per-tool CSVs; trust/ holds the feature table, the frozen rule and its evaluation
+figures/  p1/ (Figs 1-5)  p2/ (Figs 6-8)  trust/ (risk-coverage, reliability)
+tests/    self-checks, incl. test_p2_null.py (permuted labels) and test_t0_leakage.py
+docs/     paper.pdf, evaluation_protocol.md, plan/ (specs and roadmaps)
+envs/     conda environments
 ```
 
 ## Running it
@@ -120,10 +126,10 @@ conda env create -f envs/structprep.yml && conda env create -f envs/aepocketmine
 ```
 
 Install P2Rank 2.4.2 and AE-PocketMiner in the repo root ([SETUP.md](SETUP.md)). The KRAS study runs through
-`src/phase1_validation/` → `phase4_figures/` in order. The extension runs the `p1_s*` then `p2_s*` scripts in
+`src/kras/phase1_validation/` → `kras/phase4_figures/` in order. The extension runs `src/benchmark/`, then `src/perturbation/`, then `src/trust/` in
 numeric order; each script's docstring gives its exact command and environment.
 
-`p2_s2_scale.py` keeps one chunk of conformers on disk at a time (~2 GB) and reduces each target to
+`src/perturbation/p2_s2_scale.py` keeps one chunk of conformers on disk at a time (~2 GB) and reduces each target to
 per-residue arrays in `runs/p2_cache/` (~60 MB), so the sweep never needs the ~38 GB the full set would take.
 If downloads fail to resolve `*.objectstorage.*.oraclecloud.com`, your DNS is blocking OSF's storage host.
 
