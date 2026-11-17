@@ -5,18 +5,16 @@
 Geometry outperforms machine learning on an open cryptic pocket — and the ranking of cryptic-pocket
 predictors depends as much on how you score them as on the tools.
 
-Experiment complete · CJSJ quarterfinalist, under review · [Read the paper](docs/paper.pdf)
+Experiment is complete · Manuscript under Review (CJSJ Quaterfinalist) · [Read the paper](docs/paper.pdf)
 
 </div>
 
-Three MD-free pocket predictors on the KRAS G12D Switch-II pocket, then four tools across all of CryptoBench.
-The SII-P is cryptic: it forms only when a drug binds, and it is the site of the G12D inhibitor MRTX1133.
+Three MD-free pocket predictors (P2Rank, AE-PocketMiner, fpocket) were benchmarked to the Switch-II Pocket (SII-P) of KRAS G12D crystal. SII-P is a cryptic pocket, which is only formed when a drug binds, and it is also the site of the G12D inhibitor MRTX1133.
 
 ## The KRAS study
 
-Two GDP-bound crystal structures (5US4 closed, 7RPZ open), plus a 24-conformer ladder built from the closed
-structure along its lowest normal mode. Answer key: the 25 residues within 4.5 Å of MRTX1133 in 7RPZ. 7RPZ is
-quarantined — never an input to the ladder. MRTX1133 redocked at **0.96 Å RMSD**.
+Two GDP-bound crystal structures (5US4 closed, 7RPZ open) were obtained from PDB, and a 24-conformer ladder was engineered from the closed
+structure along its lowest normal mode. 
 
 | Tool | 7RPZ (open) MCC | 5US4 (closed) MCC | Mean MCC across the ladder |
 |---|---|---|---|
@@ -24,20 +22,20 @@ quarantined — never an input to the ladder. MRTX1133 redocked at **0.96 Å RMS
 | P2Rank | 0.83 | 0.00 | **0.41** |
 | AE-PocketMiner | 0.12 | 0.02 | 0.10 |
 
-- Once a cryptic pocket has formed it is geometrically ordinary, and fpocket finds it.
-- The cryptic-pocket specialist ranked last on both structures; it predicts *which residues open*, not where
+- A formed cryptic pocket would become geometrically ordinary, and fpocket effectively identifies it.
+- The cryptic-pocket specialist (AE-PocketMiner) ranked last on both structures; it predicts *which residues open*, not where
   a ligand binds, so this is a task mismatch rather than a defect.
-- Detection rate alone inverts the conclusion. Localization metrics correct it.
-- Volume is necessary but not sufficient: P2Rank missed 4 conformers at open-state volume.
+- Detection rate alone inverts the conclusion while localization metrics corrects it. 
+- Volume is necessary but insufficient as P2Rank missed 4 conformers at open-state volume.
 
-*Limits: normal modes only, so side chains are approximate; fpocket supplies both a benchmarked tool and the
+*Limitations: Study was conducted in normal modes only, so side chains are approximate; fpocket supplies both a benchmarked tool and the
 openness axis; one pocket on one target, so the ranking should not be generalized.*
 
 ## Extension: how cryptic-pocket predictors are compared
 
-Scales the KRAS finding to CryptoBench and asks what the KRAS study could not — how much of a tool's standing
-comes from the tool, and how much from the choices made when scoring it. 218 test targets, four tools
-(fpocket, P2Rank, AE-PocketMiner, pLM-NN), 846 training targets for the perturbation work.
+It extends on the previous benchmarking study specifically applied for KRAS SII-P and CryptoBench — how much of a tool's standing
+comes from the tool, and how much from the choices made when scoring it. The new study is scaled to 218 test targets, and benchmarks four tools 
+(fpocket, P2Rank, AE-PocketMiner, pLM-NN), accompanied by 846 training targets for the perturbation work.
 
 **Three evaluation choices each reorder the leaderboard, and each survives its own sensitivity check.**
 
