@@ -68,7 +68,6 @@ the backbone and re-running shows which predictions survive:
   2.84 Å), and significantly so on held-out for AE-PocketMiner. The signal is not about dynamics.
 
 Nothing is fitted — the combined signal is a parameter-free rank-sum — so no split can leak into another.
-**Target venue: ICML 2027.**
 
 ## When should you believe a prediction?
 
