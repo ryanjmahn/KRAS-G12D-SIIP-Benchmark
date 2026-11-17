@@ -88,6 +88,13 @@ agreement with pLM-NN is the ablation (`rule_full.json`) and is what identifies 
 mechanism. Calibrated out-of-fold, ECE 0.049–0.068. pLM-NN itself gains nothing: its training split holds 35
 negatives, so there is nothing to learn, and its row is a limitation rather than a result.
 
+## Two extension papers 
+
+** Paper 1: "The Ranking Is Not the Tool: Three Evaluation Choices That Reorder Cryptic-Pocket Benchmarks **
+** Paper 2: "Not Self-Certifying, but Cross-Certifying: When to Believe a Cryptic-Pocket Prediction" **
+
+Subject to be submitted to ICML & ICLR Workshops in 2027
+
 ```python
 from trust.t3_rule import trust  # or: sys.path += ['src']; from t3_rule import trust
 trust(row, "fpocket")      # -> (score, calibrated probability, recommended action)
