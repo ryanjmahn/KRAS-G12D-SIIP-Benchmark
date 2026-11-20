@@ -5,7 +5,7 @@
 Geometry outperforms machine learning on an open cryptic pocket — and the ranking of cryptic-pocket
 predictors depends as much on how you score them as on the tools.
 
-Experiment is complete · Manuscript under Review (CJSJ Quaterfinalist) · [Read the paper](docs/paper.pdf)
+Experiment is complete · Manuscript under Review (CJSJ Semi-Finalist) · [Read the paper](docs/paper.pdf)
 
 </div>
 
